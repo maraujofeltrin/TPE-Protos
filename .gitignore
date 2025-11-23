@@ -7,7 +7,7 @@
 *.class
 bin/
 obj/
-bulid/
+
 
 # Logs
 *.log
@@ -19,3 +19,4 @@ bulid/
 background.sh
 Dockerfile
 run.sh
+/build
