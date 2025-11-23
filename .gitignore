@@ -1,78 +1,21 @@
-# Archivos compilados
-*.o
-*.a
-*.so
-*.dylib
-*.dll
-*.exe
+.DS_Store
 
-# Directorio de compilación
-build/
+# Compilación
+*.o
+*.out
+*.exe
+*.class
 bin/
 obj/
-
-# Archivos de depuración
-*.dSYM/
-*.su
-*.idb
-*.pdb
-
-# Archivos temporales del editor
-*~
-*.swp
-*.swo
-.*.swp
-.*.swo
-
-# IDEs y editores
-.vscode/
-.idea/
-*.vcxproj*
-*.sln
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
-
-# Sistema operativo
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+bulid/
 
 # Logs
 *.log
 
-# Archivos de core dump
-core
-core.*
-
-# Archivos de backup
-*.bak
-*.backup
-*.orig
-
-# Archivos específicos del proyecto
-# (agregar aquí archivos específicos si es necesario)
-
-# Archivos de configuración local
-config.local
-*.local
-
-# Archivos de testing
-test_results/
-coverage/
-*.gcov
-*.gcda
-*.gcno
-
-# Documentación generada
-docs/generated/
-*.pdf
-
-# Archivos de parche temporales
-*.patch
-*.diff
+#especial
+.env
+.vscode/
+.idea/
+background.sh
+Dockerfile
+run.sh
