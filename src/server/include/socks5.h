@@ -2,47 +2,46 @@
 #define SOCKS5_H_
 
 #include "selector.h"
+#include "stm.h"
+#include "parser.h"
+#include "handshake.h"
+#include "buffer.h"
 
-/**
- * Estructura para mantener el estado de una conexión SOCKS5
- */
-struct socks5_connection {
+#define SOCKS5_VERSION 0x05
+
+//VER SI FALTAN MAS
+typedef enum {
+    HANDSHAKE,
+    HANDSHAKE_RESPONSE,
+    REQUEST,
+    REQUEST_RESPONSE,
+    ERROR,
+    CLOSED,
+    REQUEST_CONNECT,
+    REQUEST_BIND,
+    AUTHENTICATION,
+    AUTHENTICATION_RESPONSE
+} socks5_state_t;
+
+
+typedef struct socks5_connection {
     int client_fd;
     int target_fd;
-    enum socks5_state {
-        SOCKS5_HELLO,
-        SOCKS5_REQUEST,
-        SOCKS5_CONNECTING,
-        SOCKS5_COPY,
-        SOCKS5_DONE,
-        SOCKS5_ERROR
-    } state;
+    socks5_state_t state;
     void *data;
-};
+    char target_addr[512];
+    char client_ip[64];
+    struct state_machine stm;
+    union{
+        handshake_context_t handshake;
+        handshake_parser_t request;
+    }parser;
 
-/**
- * Handler para nuevas conexiones SOCKS5
- */
-extern const struct fd_handler socks5_passive_handler;
+    buffer read_b, write_b;
 
-/**
- * Handler para conexiones SOCKS5 establecidas
- */
-extern const struct fd_handler socks5_active_handler;
+} socks5_connection_t;
 
-/**
- * Funciones del handler SOCKS5
- */
-void socks5_passive_accept(struct selector_key *key);
-void socks5_read(struct selector_key *key);
-void socks5_write(struct selector_key *key);
-void socks5_block(struct selector_key *key);
-void socks5_close(struct selector_key *key);
 
-/**
- * Funciones auxiliares SOCKS5
- */
-struct socks5_connection* socks5_connection_new(int client_fd);
-void socks5_connection_destroy(struct socks5_connection *conn);
+
 
 #endif

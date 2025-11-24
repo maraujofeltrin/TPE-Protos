@@ -218,3 +218,69 @@ main(const int argc, char **argv) {
     
     return ret;
 }
+
+void 
+socks5_close(struct selector_key *key) {
+    struct socks5_connection *conn = (struct socks5_connection *)key->data;
+    
+    printf("Closing SOCKS5 connection fd=%d\n", key->fd);
+    
+    if (conn != NULL) {
+        socks5_connection_destroy(conn);
+    }
+}
+
+void 
+socks5_read(struct selector_key *key) {
+    struct socks5_connection *conn = (struct socks5_connection *)key->data;
+    
+    printf("SOCKS5 read on fd=%d, state=%d\n", key->fd, conn->state);
+    
+    // TODO: Implementar lógica de lectura según el estado
+    switch (conn->state) {
+        case SOCKS5_HELLO:
+            // Leer saludo inicial del cliente
+            break;
+        case SOCKS5_REQUEST:
+            // Leer petición de conexión
+            break;
+        case SOCKS5_COPY:
+            // Copiar datos entre cliente y target
+            break;
+        default:
+            printf("Estado SOCKS5 no manejado: %d\n", conn->state);
+            break;
+    }
+}
+
+void 
+socks5_write(struct selector_key *key) {
+    struct socks5_connection *conn = (struct socks5_connection *)key->data;
+    
+    printf("SOCKS5 write on fd=%d, state=%d\n", key->fd, conn->state);
+    
+    // TODO: Implementar lógica de escritura según el estado
+    switch (conn->state) {
+        case SOCKS5_HELLO:
+            // Enviar respuesta al saludo
+            break;
+        case SOCKS5_REQUEST:
+            // Enviar respuesta a la petición
+            break;
+        case SOCKS5_COPY:
+            // Copiar datos entre cliente y target
+            break;
+        default:
+            printf("Unhandled SOCKS5 state: %d\n", conn->state);
+            break;
+    }
+}
+
+void 
+socks5_block(struct selector_key *key) {
+    struct socks5_connection *conn = (struct socks5_connection *)key->data;
+    
+    printf("SOCKS5 block on fd=%d, state=%d\n", key->fd, conn->state);
+    
+    // TODO: Manejar operaciones bloqueantes (ej: resolución DNS)
+}
