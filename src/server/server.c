@@ -284,4 +284,55 @@ socks5_block(struct selector_key *key) {
     
     // TODO: Manejar operaciones bloqueantes (ej: resolución DNS)
 }
+
+
+void 
+metp_read(struct selector_key *key) {
+    struct metp_connection *conn = (struct metp_connection *)key->data;
+    
+    printf("METP read on fd=%d, state=%d\n", key->fd, conn->state);
+    
+    // TODO: Implementar lógica de lectura según el estado
+    switch (conn->state) {
+        case METP_AUTH:
+            // Leer credenciales de autenticación
+            break;
+        case METP_COMMAND:
+            // Leer comando de administración
+            break;
+        default:
+            printf("Unhandled METP state: %d\n", conn->state);
+            break;
+    }
+}
+
+void 
+metp_write(struct selector_key *key) {
+    struct metp_connection *conn = (struct metp_connection *)key->data;
+    
+    printf("METP write on fd=%d, state=%d\n", key->fd, conn->state);
+    
+    // TODO: Implementar lógica de escritura según el estado
+    switch (conn->state) {
+        case METP_AUTH:
+            // Enviar respuesta de autenticación
+            break;
+        case METP_RESPONSE:
+            // Enviar respuesta al comando
+            break;
+        default:
+            printf("Unhandled METP state: %d\n", conn->state);
+            break;
+    }
+}
+
+void 
+metp_block(struct selector_key *key) {
+    struct metp_connection *conn = (struct metp_connection *)key->data;
+    
+    printf("METP block on fd=%d, state=%d\n", key->fd, conn->state);
+    
+    // TODO: Manejar operaciones bloqueantes (ej: consultas a base de datos)
+}
+
 */

@@ -230,7 +230,17 @@ static unsigned socks5_authentication_on_read(struct selector_key * key) {
         user_t * user = authenticate_user(auth_ctx->request.username, auth_ctx->request.password);
         connection->user = user;
         connection->auth_status = (user != NULL) ? AUTH_SUCCESS : AUTH_FAILED;
-        
+        buffer *wb = &connection->write_p;
+        size_t available;
+        uint8_t *out = buffer_write_ptr(wb, &available);
+        if (available >= 2) {
+            out[0] = auth_ctx->response.version;
+            out[1] = auth_ctx->response.status;
+            buffer_write_adv(wb, 2);
+        } else {
+            buffer_write(wb, auth_ctx->response.version);
+            buffer_write(wb, auth_ctx->response.status);
+        }
         selector_set_interest_key(key, OP_WRITE);
         return AUTHENTICATION_RESPONSE;
     }
@@ -283,8 +293,26 @@ static void socks5_request_on_arrival(const unsigned int state, struct selector_
 }
 
 static void * dns_resolve_thread(void * arg){
-    (void)arg; //VER ESTO
-    //VER ESTO   
+    struct selector_key * key = (struct selector_key *)arg;
+    socks5_connection_t * connection = key->data;
+
+    uint16_t port = connection->parser.request.request.dest_address.port;
+    char s[6];
+    snprintf(s, sizeof(s), "%u", port);
+
+    struct addrinfo hints = {
+        .ai_family = AF_UNSPEC,
+        .ai_socktype = SOCK_STREAM
+    };
+
+    int res = getaddrinfo((char*)connection->parser.request.request.dest_address.address.domainname, s, &hints, &connection->req_address);
+
+    if(res != 0){
+        connection->req_address = NULL;
+    }
+    
+    selector_notify_block(key->s, key->fd);
+    free(arg);
     return NULL;
 }
 
@@ -309,8 +337,7 @@ static unsigned socks5_request_on_read(struct selector_key * key){
     size_t disp;
     uint8_t * buf = buffer_read_ptr(b, &disp);
     size_t ocu = 0;
-    /* parse into the inner request parser */
-    int res = parse_socks5_request(&connection->parser.request.request, buf, disp, &ocu); //VER QUE FALTA IMPLEMETAR
+    int res = parse_socks5_request(&connection->parser.request.request, buf, disp, &ocu);
 
     if(res == 0){
         buffer_read_adv(b, ocu);
@@ -329,7 +356,6 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                         char ip4_str[INET_ADDRSTRLEN];
                         inet_ntop(AF_INET, connection->parser.request.request.dest_address.address.ipv4, ip4_str, INET_ADDRSTRLEN);
                         
-                        // Crear socket y conectar directamente para IPv4
                         //VER IMPELEMENTACION
                         int target_fd_new = socket(connection->remote_domain, SOCK_STREAM | SOCK_NONBLOCK, 0);
                         if(target_fd_new >= 0) {
@@ -369,7 +395,6 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                         char ip6_str[INET6_ADDRSTRLEN];
                         inet_ntop(AF_INET6, connection->parser.request.request.dest_address.address.ipv6, ip6_str, INET6_ADDRSTRLEN);
                         
-                        // Crear socket y conectar directamente para IPv6
                         //VER IMPELEMENTACION
                         target_fd_new = socket(connection->remote_domain, SOCK_STREAM | SOCK_NONBLOCK, 0);
                         if(target_fd_new >= 0) {
@@ -434,7 +459,7 @@ static unsigned socks5_request_response_on_read(struct selector_key * key){
         .reserved = 0x00
     };
     
-    // Configurar dirección de error
+
     reply.add.atyp = (connection->remote_domain == AF_INET) ? SOCKS5_ATYP_IPV4 : SOCKS5_ATYP_IPV6;
     if (reply.add.atyp == SOCKS5_ATYP_IPV4) {
         memset(reply.add.address.ipv4, 0, 4);
@@ -470,13 +495,13 @@ static int get_bound_address(int fd, socks5_address *addr) {
         struct sockaddr_in *addr_in4 = (struct sockaddr_in *)&s;
         addr->atyp = SOCKS5_ATYP_IPV4;
         memcpy(addr->address.ipv4, &addr_in4->sin_addr, 4);
-        addr->port = addr_in4->sin_port; // Ya en network order
+        addr->port = addr_in4->sin_port; 
     }
     else if(s.ss_family == AF_INET6) {
         struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6 *)&s;
         addr->atyp = SOCKS5_ATYP_IPV6;
         memcpy(addr->address.ipv6, &addr_in6->sin6_addr, 16);
-        addr->port = addr_in6->sin6_port; // Ya en network order
+        addr->port = addr_in6->sin6_port; 
     }
     else {
         return -1;
