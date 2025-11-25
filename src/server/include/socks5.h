@@ -6,6 +6,9 @@
 #include "parser.h"
 #include "handshake.h"
 #include "buffer.h"
+#include "authentication.h"
+#include <pthread.h>
+
 
 #define SOCKS5_VERSION 0x05
 
@@ -35,9 +38,16 @@ typedef struct socks5_connection {
     union{
         handshake_context_t handshake;
         handshake_parser_t request;
+        authentication_context_t authentication;
     }parser;
+    buffer read_c, write_c;
+    buffer read_p, write_p;
+    int remote_domain;
+    socklen_t remote_address_len;
+    struct sockaddr_storage remote_address;
 
-    buffer read_b, write_b;
+    struct addrinfo * req_address;
+    struct addrinfo * cur_req_address;
 
 } socks5_connection_t;
 
