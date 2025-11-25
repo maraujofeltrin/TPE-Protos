@@ -10,6 +10,14 @@
 #include "include/metp.h"
 
 static const struct state_definition metp_states_def[] = {
+    [METP_HANDSHAKE] = {
+        .state = METP_HANDSHAKE,
+        .on_read_ready = metp_handshake_read,
+    },
+    [METP_HANDSHAKE_RESPONSE] = {
+        .state = METP_HANDSHAKE_RESPONSE,
+        .on_write_ready = metp_handshake_response_write,
+    },
     [METP_AUTH] = {
         .state = METP_AUTH,
         .on_read_ready = metp_read,
@@ -35,3 +43,16 @@ static const struct state_definition metp_states_def[] = {
         .state = METP_ERROR,
     }
 };
+
+const struct state_definition * get_metp_state_definition() {
+    return metp_states_def;
+}
+
+static unsigned metp_handshake_read(struct selector_key *key) {
+    
+}
+
+static unsigned metp_handshake_response_write(struct selector_key *key) {
+    
+}
+
