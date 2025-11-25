@@ -2,9 +2,12 @@
 #define AUTHENTICATION_H
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdbool.h>
+#include "buffer.h"
 #define AUTH_VERSION 0x01
 
 static const uint8_t AUTH_FAILED = 0x00;
+static const uint8_t AUTH_SUCCESS = 0x01;
 
 
 typedef enum auth_index{
@@ -17,6 +20,8 @@ typedef enum auth_index{
     AUTH_COMPLETED,
     AUTH_ERROR_DEFAULT
 }auth_index;
+
+
 
 typedef struct authentication_request {
     uint8_t version;
@@ -41,4 +46,5 @@ typedef struct authentication_context {
     auth_index index;
 } authentication_context_t;
 
+auth_index authentication_parse(struct authentication_context * auth_ctx, buffer * buff, bool * error);
 #endif

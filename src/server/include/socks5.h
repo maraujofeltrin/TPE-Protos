@@ -3,12 +3,15 @@
 
 #include "selector.h"
 #include "stm.h"
-#include "parser.h"
+#include "builder.h"
 #include "handshake.h"
 #include "buffer.h"
 #include "authentication.h"
 #include <pthread.h>
-
+#include <netdb.h>
+#include <sys/socket.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 #define SOCKS5_VERSION 0x05
 
@@ -45,13 +48,12 @@ typedef struct socks5_connection {
     int remote_domain;
     socklen_t remote_address_len;
     struct sockaddr_storage remote_address;
-
+    struct user * user;
+    uint8_t auth_status;
     struct addrinfo * req_address;
     struct addrinfo * cur_req_address;
 
 } socks5_connection_t;
-
-
 
 
 #endif

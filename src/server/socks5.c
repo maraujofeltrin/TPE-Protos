@@ -6,9 +6,33 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <arpa/inet.h>
 
 #include "include/socks5.h"
 #include "selector.h"
+#include "include/authentication.h"
+#include "include/users.h"
+
+
+// Declaraciones de funciones static
+static void socks5_handshake_on_arrival(const unsigned int state, struct selector_key * key);
+static unsigned socks5_handshake_on_read(struct selector_key * key);
+static unsigned socks5_handshake_response_on_write(struct selector_key * key);
+static void socks5_authentication_on_arrival(const unsigned int state, struct selector_key * key);
+static unsigned socks5_authentication_on_read(struct selector_key * key);
+static unsigned socks5_authentication_response_on_write(struct selector_key * key);
+static unsigned socks5_error_on_read();
+static unsigned socks5_error_on_write();
+static unsigned socks5_closed_on_read();
+static unsigned socks5_closed_on_write();
+static void socks5_request_on_arrival(const unsigned int state, struct selector_key * key);
+static unsigned socks5_request_on_read(struct selector_key * key);
+static void socks5_request_response_on_arrival(const unsigned int state, struct selector_key * key);
+static unsigned socks5_request_response_on_read(struct selector_key * key);
+static unsigned socks5_request_connect_on_write(struct selector_key * key);
+static unsigned socks5_request_bind_on_write(struct selector_key * key);
+static void * dns_resolve_thread(void * arg);
+static int get_bound_address(int fd, socks5_address *addr);
 
 //VER SI FALTAN MAS
 static const struct state_definition socks5_states_def[] = {
@@ -60,14 +84,15 @@ static const struct state_definition socks5_states_def[] = {
     }
 };
 
-static void socks5_handshake_on_arrival(struct selector_key * key) {
+static void socks5_handshake_on_arrival(const unsigned int state, struct selector_key * key) {
+    (void)state; 
     socks5_connection_t * connection = key->data;
     connection->parser.handshake.bytes_read = 0;
     connection->parser.handshake.bytes_written = 0;
     connection->parser.handshake.request.version = SOCKS5_VERSION;
     connection->parser.handshake.request.nmethods = 0;
     connection->parser.handshake.response.version = SOCKS5_VERSION;
-    connection->parser.handshake.response.method = HANDSHAKE_METHOD_NO_ACCEPTABLE;
+    connection->parser.handshake.response.method    = HANDSHAKE_METHOD_NO_ACCEPTABLE;
 }
 
 static unsigned socks5_handshake_on_read(struct selector_key * key) {
@@ -77,7 +102,7 @@ static unsigned socks5_handshake_on_read(struct selector_key * key) {
     
     size_t bytes;
     uint8_t * des = buffer_write_ptr(b, &bytes);
-    size_t rec = recv(key->fd, des, bytes, 0);
+    ssize_t rec = recv(key->fd, des, bytes, 0);
 
     if(rec < 0){
         perror("recv");
@@ -87,7 +112,7 @@ static unsigned socks5_handshake_on_read(struct selector_key * key) {
         return CLOSED;
     }
     else{
-        buffer_write_adv(b, rec);
+        buffer_write_adv(b, (size_t)rec);
     }
 
     size_t disp;
@@ -116,7 +141,7 @@ static unsigned socks5_handshake_on_read(struct selector_key * key) {
         disp--;
         buf++;
 
-        if(handshake->bytes_read == 2 + handshake->request.nmethods){
+        if(handshake->bytes_read == (size_t)(2 + handshake->request.nmethods)){
             handshake->response.version = SOCKS5_VERSION;
             handshake->response.method = HANDSHAKE_METHOD_NO_ACCEPTABLE;
             
@@ -163,9 +188,18 @@ static unsigned socks5_handshake_response_on_write(struct selector_key * key) {
     return HANDSHAKE_RESPONSE;
 }
 
-static void socks5_authentication_on_arrival(struct selector_key * key) {
+static void socks5_authentication_on_arrival(const unsigned int state, struct selector_key * key) {
+    (void)state; 
     socks5_connection_t * connection = key->data;
-    authenticaction_initialize(&connection->parser.authentication);
+    authentication_context_t * auth_ctx = &connection->parser.authentication;
+    auth_ctx->request.version = 0;
+    auth_ctx->request.ulen = 0;
+    auth_ctx->request.plen = 0;
+    auth_ctx->response.version = AUTH_VERSION;
+    auth_ctx->response.status = 0;
+    auth_ctx->bytes_read = 0;
+    auth_ctx->bytes_written = 0;
+    auth_ctx->index = AUTH_STATE_VERSION;
 }
 
 static unsigned socks5_authentication_on_read(struct selector_key * key) {
@@ -174,7 +208,7 @@ static unsigned socks5_authentication_on_read(struct selector_key * key) {
     authentication_context_t * auth_ctx = &connection->parser.authentication;
     size_t bytes;
     uint8_t * des = buffer_write_ptr(b, &bytes);
-    size_t rec = recv(key->fd, des, bytes, 0);
+    ssize_t rec = recv(key->fd, des, bytes, 0);
     if(rec == 0){
         return CLOSED;
     }
@@ -183,7 +217,7 @@ static unsigned socks5_authentication_on_read(struct selector_key * key) {
         return ERROR;
     }
     else{
-        buffer_write_adv(b, rec);
+        buffer_write_adv(b, (size_t)rec);
     }
 
     bool error = false;
@@ -193,7 +227,10 @@ static unsigned socks5_authentication_on_read(struct selector_key * key) {
         return AUTHENTICATION_RESPONSE;
     }
     if(res == AUTH_COMPLETED){
-        //VER SI HAY QUE VALIDAR USUARIO Y CONTRASEÑA
+        user_t * user = authenticate_user(auth_ctx->request.username, auth_ctx->request.password);
+        connection->user = user;
+        connection->auth_status = (user != NULL) ? AUTH_SUCCESS : AUTH_FAILED;
+        
         selector_set_interest_key(key, OP_WRITE);
         return AUTHENTICATION_RESPONSE;
     }
@@ -224,12 +261,31 @@ static unsigned socks5_authentication_response_on_write(struct selector_key * ke
     return AUTHENTICATION_RESPONSE;
 }
 
-static void socks5_request_on_arrival(struct selector_key * key){
+static unsigned socks5_error_on_read(){
+    return CLOSED;
+}
+
+static unsigned socks5_error_on_write(){
+    return CLOSED;
+}
+
+static unsigned socks5_closed_on_read(){
+    return CLOSED;
+}
+
+static unsigned socks5_closed_on_write(){
+    return CLOSED;
+}
+
+static void socks5_request_on_arrival(const unsigned int state, struct selector_key * key){
+    (void)state; 
     selector_set_interest_key(key, OP_READ);
 }
 
 static void * dns_resolve_thread(void * arg){
+    (void)arg; //VER ESTO
     //VER ESTO   
+    return NULL;
 }
 
 static unsigned socks5_request_on_read(struct selector_key * key){
@@ -238,7 +294,7 @@ static unsigned socks5_request_on_read(struct selector_key * key){
 
     size_t bytes;
     uint8_t * des = buffer_write_ptr(b, &bytes);
-    size_t rec = recv(key->fd, des, bytes, 0);
+    ssize_t rec = recv(key->fd, des, bytes, 0);
     if(rec == 0){
         return CLOSED;
     }
@@ -247,18 +303,19 @@ static unsigned socks5_request_on_read(struct selector_key * key){
         return ERROR;
     }
     else{
-        buffer_write_adv(b, rec);
+        buffer_write_adv(b, (size_t)rec);
     }
 
     size_t disp;
     uint8_t * buf = buffer_read_ptr(b, &disp);
     size_t ocu = 0;
-    int res = parse_socks5_request(&connection->parser.request, buf, disp, &ocu);
+    /* parse into the inner request parser */
+    int res = parse_socks5_request(&connection->parser.request.request, buf, disp, &ocu); //VER QUE FALTA IMPLEMETAR
 
     if(res == 0){
         buffer_read_adv(b, ocu);
         switch(connection->parser.request.request.command){
-            case REQUEST_CONNECT:
+            case SOCKS5_COM_CONNECT:
                 switch(connection->parser.request.request.dest_address.atyp){
                     case SOCKS5_ATYP_IPV4:
                         connection->remote_domain = AF_INET;
@@ -270,11 +327,25 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                         address_in4->sin_port = htons(connection->parser.request.request.dest_address.port);
                         
                         char ip4_str[INET_ADDRSTRLEN];
-                        inet_ntop(AF_INET, connection->parser.request.request.dest_address.address, ip4_str, INET_ADDRSTRLEN);
-                        return /*//VER DE INICIALIZAR REMOTE CONECTION*/;
+                        inet_ntop(AF_INET, connection->parser.request.request.dest_address.address.ipv4, ip4_str, INET_ADDRSTRLEN);
+                        
+                        // Crear socket y conectar directamente para IPv4
+                        //VER IMPELEMENTACION
+                        int target_fd_new = socket(connection->remote_domain, SOCK_STREAM | SOCK_NONBLOCK, 0);
+                        if(target_fd_new >= 0) {
+                            int connect_result = connect(target_fd_new, (struct sockaddr*)&connection->remote_address, connection->remote_address_len);
+                            if(connect_result == 0 || (connect_result == -1 && errno == EINPROGRESS)) {
+                                connection->target_fd = target_fd_new;
+                                selector_set_interest_key(key, OP_WRITE);
+                                return REQUEST_CONNECT;
+                            }
+                            close(target_fd_new);
+                        }
+                        return ERROR;
 
-                    case SOCKS5_ATYP_DOMAINNAME:
+                    case SOCKS5_ATYP_DOMAINNAME: {
                         struct selector_key *sk = malloc(sizeof(struct selector_key));
+                        if(!sk) return ERROR;
                         *sk = *key;
                         pthread_t dns_thread;
                         if(pthread_create(&dns_thread, NULL, dns_resolve_thread, sk) != 0){
@@ -284,6 +355,7 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                         pthread_detach(dns_thread);
                         selector_set_interest_key(key, OP_NOOP);
                         return REQUEST_CONNECT;
+                    }
 
                     case SOCKS5_ATYP_IPV6:
                         connection->remote_domain = AF_INET6;
@@ -295,10 +367,23 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                         address_in6->sin6_port = htons(connection->parser.request.request.dest_address.port);
 
                         char ip6_str[INET6_ADDRSTRLEN];
-                        inet_ntop(AF_INET6, connection->parser.request.request.dest_address.address, ip6_str, INET6_ADDRSTRLEN);
-                        return /*//VER DE INICIALIZAR REMOTE CONECTION*/;
+                        inet_ntop(AF_INET6, connection->parser.request.request.dest_address.address.ipv6, ip6_str, INET6_ADDRSTRLEN);
+                        
+                        // Crear socket y conectar directamente para IPv6
+                        //VER IMPELEMENTACION
+                        target_fd_new = socket(connection->remote_domain, SOCK_STREAM | SOCK_NONBLOCK, 0);
+                        if(target_fd_new >= 0) {
+                            int connect_result = connect(target_fd_new, (struct sockaddr*)&connection->remote_address, connection->remote_address_len);
+                            if(connect_result == 0 || (connect_result == -1 && errno == EINPROGRESS)) {
+                                connection->target_fd = target_fd_new;
+                                selector_set_interest_key(key, OP_WRITE);
+                                return REQUEST_CONNECT;
+                            }
+                            close(target_fd_new);
+                        }
+                        return ERROR;
                 }
-            case REQUEST_BIND:
+            case SOCKS5_COM_BIND:
                 selector_set_interest_key(key, OP_WRITE);
                 return REQUEST_BIND;
             default:
@@ -308,40 +393,165 @@ static unsigned socks5_request_on_read(struct selector_key * key){
     return REQUEST;
 }
 
-static void socks5_request_response_on_arrival(struct selector_key * key){
+static void socks5_request_response_on_arrival(const unsigned int state, struct selector_key * key){
+    (void)state; 
     selector_set_interest_key(key, OP_READ);
 }
 
 static unsigned socks5_request_response_on_read(struct selector_key * key){
     socks5_connection_t * connection = key->data;
+
+    if (connection->req_address == NULL) {
+        return ERROR; 
+    }
     struct addrinfo * resp = connection->req_address;
     struct addrinfo * cur = resp;
     
-    //VER EL WHILE PQ REALMENTE NO CICLA PERO PODRIA 
-    while(cur != NULL){
+    while (cur != NULL) {
         connection->remote_domain = cur->ai_family;
         connection->remote_address_len = cur->ai_addrlen;
         memcpy(&connection->remote_address, cur->ai_addr, cur->ai_addrlen);
 
-        freeaddrinfo(resp);
-        connection->req_address = NULL;
-        socks5_response_parser_t reply= {
-            .version = SOCKS5_VERSION,
-            .response = SOCKS5_REP_HOST_UNREACHABLE,
-            .reserved = 0x00,
-            .add = (connection->remote_domain == AF_INET) ? SOCKS5_ATYP_IPV4 : SOCKS5_ATYP_IPV6
-        };
-        memset(&reply.dest_address, 0, sizeof(reply.dest_address));
-        reply.dest_address.port = 0;
+        int target_fd = socket(connection->remote_domain, SOCK_STREAM, 0);
+        if (target_fd >= 0) {
+            int connect_result = connect(target_fd, (struct sockaddr *)&connection->remote_address, connection->remote_address_len);
+            if (connect_result == 0) {
+                connection->target_fd = target_fd; 
+                return REQUEST_CONNECT;
+            }
+            close(target_fd); 
+        }
 
-        //VER DE TERMINAR ESTO !!!!!!!!
-
-        return /*//VER DE INICIALIZAR REMOTE CONNECTION*/;
+        cur = cur->ai_next;
     }
 
     freeaddrinfo(resp);
     connection->req_address = NULL;
+
+    socks5_response_parser_t reply = {
+        .version = SOCKS5_VERSION,
+        .response = SOCKS5_REP_HOST_UNREACHABLE,
+        .reserved = 0x00
+    };
+    
+    // Configurar dirección de error
+    reply.add.atyp = (connection->remote_domain == AF_INET) ? SOCKS5_ATYP_IPV4 : SOCKS5_ATYP_IPV6;
+    if (reply.add.atyp == SOCKS5_ATYP_IPV4) {
+        memset(reply.add.address.ipv4, 0, 4);
+    } else {
+        memset(reply.add.address.ipv6, 0, 16);
+    }
+    reply.add.port = 0;
+
+    uint8_t * r;
+    size_t len;
+    if (socks5_response(&reply, &r, &len) < 0) {
+        fprintf(stderr, "Error al generar la respuesta SOCKS5\n");
+        return ERROR;
+    }    
+    for(size_t i = 0; i < len; i++){
+        buffer_write(&connection->write_p, r[i]);
+    }
+    free(r);
     
     selector_set_interest_key(key, OP_WRITE);
     return CLOSED;
+}
+
+static int get_bound_address(int fd, socks5_address *addr) {
+    struct sockaddr_storage s;
+    socklen_t len = sizeof(s);
+
+    if(getsockname(fd, (struct sockaddr *)&s, &len) < 0) {
+        return -1;
+    }
+
+    if(s.ss_family == AF_INET) {
+        struct sockaddr_in *addr_in4 = (struct sockaddr_in *)&s;
+        addr->atyp = SOCKS5_ATYP_IPV4;
+        memcpy(addr->address.ipv4, &addr_in4->sin_addr, 4);
+        addr->port = addr_in4->sin_port; // Ya en network order
+    }
+    else if(s.ss_family == AF_INET6) {
+        struct sockaddr_in6 *addr_in6 = (struct sockaddr_in6 *)&s;
+        addr->atyp = SOCKS5_ATYP_IPV6;
+        memcpy(addr->address.ipv6, &addr_in6->sin6_addr, 16);
+        addr->port = addr_in6->sin6_port; // Ya en network order
+    }
+    else {
+        return -1;
+    }
+    return 0;
+}
+
+static unsigned socks5_request_connect_on_write(struct selector_key * key){
+    socks5_connection_t * connection = key->data;
+    int rfd = connection->target_fd;
+    
+    if(rfd == -1){
+        return ERROR;
+    }
+
+    int err = 0; 
+    socklen_t len = sizeof(err);
+    if(getsockopt(rfd, SOL_SOCKET, SO_ERROR, &err, &len) < 0){
+        return ERROR;
+    }
+    
+    if(err){
+        return ERROR;
+    }
+
+    socks5_response_parser_t reply = {
+        .version = SOCKS5_VERSION,
+        .response = SOCKS5_REP_SUCCEEDED,
+        .reserved = 0x00
+    };
+    
+    if(get_bound_address(rfd, &reply.add) < 0) {
+        return ERROR;
+    }
+
+    uint8_t *out; 
+    size_t outlen;
+    socks5_response(&reply, &out, &outlen);
+    for(size_t i = 0; i < outlen; i++){
+        buffer_write(&connection->write_p, out[i]);
+    }
+    free(out);
+
+    connection->stm.current = &connection->stm.states[REQUEST_RESPONSE];
+    selector_set_interest(key->s, connection->client_fd, OP_WRITE);
+    selector_set_interest(key->s, connection->target_fd, OP_READ);
+    return REQUEST_RESPONSE;
+}
+
+
+static unsigned socks5_request_bind_on_write(struct selector_key * key){
+    socks5_connection_t * connection = key->data;
+    socks5_response_parser_t reply = {
+        .version = SOCKS5_VERSION,
+        .response = SOCKS5_REP_SUCCEEDED,
+        .reserved = 0x00,
+        .add = {.atyp = SOCKS5_ATYP_IPV4}
+    };
+
+    if(get_bound_address(connection->target_fd, &reply.add) < 0) {
+        return ERROR;
+    }
+
+    uint8_t * r;
+    size_t len;
+    if (socks5_response(&reply, &r, &len) < 0) {
+        fprintf(stderr, "Error al generar la respuesta SOCKS5\n");
+        return ERROR;
+    }
+
+    for(size_t i = 0; i < len; i++){
+        buffer_write(&connection->write_p, r[i]);
+    }
+    free(r);
+
+    selector_set_interest_key(key, OP_WRITE);
+    return REQUEST_RESPONSE;
 }

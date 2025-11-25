@@ -53,7 +53,7 @@ typedef struct socks5_request_parser{
 typedef struct socks5_response_parser{
     uint8_t version;
     uint8_t reserved;
-    socks5_address_type add;
+    socks5_address add;
     socks5_response_type response;
 } socks5_response_parser_t;
 
@@ -63,21 +63,9 @@ typedef struct handshake_parser{
 } handshake_parser_t;
 
 
+int parse_socks5_request(socks5_request_parser_t * request, const uint8_t * buf, size_t len, size_t * parsed_bytes);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+int socks5_response(socks5_response_parser_t * response, uint8_t ** out_buf, size_t * out_len);
 #endif
 
 

@@ -7,7 +7,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-
+/*
 
 #include "include/server.h"
 #include "include/socks5.h"
@@ -284,3 +284,4 @@ socks5_block(struct selector_key *key) {
     
     // TODO: Manejar operaciones bloqueantes (ej: resolución DNS)
 }
+*/

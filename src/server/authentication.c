@@ -1,17 +1,6 @@
 #include "include/authentication.h"
 #include "buffer.h"
 
-static void authenticaction_initialize(struct authentication_context * auth_ctx) {
-    auth_ctx->request.version = 0;
-    auth_ctx->request.ulen = 0;
-    auth_ctx->request.plen = 0;
-    auth_ctx->response.version = AUTH_VERSION;
-    auth_ctx->response.status = 0;
-    auth_ctx->bytes_read = 0;
-    auth_ctx->bytes_written = 0;
-    auth_ctx->index = AUTH_STATE_VERSION;
-}
-
 auth_index authentication_parse(struct authentication_context * auth_ctx, buffer * buff, bool * error) {
     while(buffer_can_read(buff)) {
         uint8_t aux = buffer_read(buff);
