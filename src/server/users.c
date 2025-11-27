@@ -105,7 +105,7 @@ const char * get_user_list() {
 }
 
 const char * get_all_logs(void){
-	char buf[MAX_LOGS];		//VER EL NUMERO 
+	static char buf[MAX_LOGS];		//VER EL NUMERO 
 	int p;
 
 	for(int i = 0; i < cant_logs; i++){

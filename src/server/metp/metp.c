@@ -9,6 +9,7 @@
 #include "selector.h"
 #include "../include/metp.h"
 #include "../include/users.h"
+#include "../include/metrics.h"
 
 #define BUFFER_MAX 1024
 
@@ -72,7 +73,6 @@ static void write_message_to_buffer(buffer * b, const char *message) {
     for (size_t i = 0; i < len; i++) {
         buffer_write(b, (uint8_t)message[i]);
     }
-    selector_set_interest_key(key, OP_WRITE);
 }
 
 static unsigned send_response(struct selector_key * key, const char * message, unsigned next_state) {
@@ -173,8 +173,9 @@ static unsigned metp_handshake_response_write(struct selector_key * key) {
 
 
 static void metp_error_arrival(const unsigned state, struct selector_key * key) {
+    (void) state;
     metp_connection_t * connection = key->data;
-    
+
     if(!buffer_can_read(connection->buffer_w)){
         write_message_to_buffer(connection->buffer_w, "500 Internal Server Error\n");
     }
@@ -333,7 +334,7 @@ static unsigned metp_request_read(struct selector_key * key) {
                     write_message_to_buffer(conn->buffer_w, response);
                     state = METP_REQUEST_RESPONSE;
                 } else {
-                    char * user_list = get_user_list();
+                    const char * user_list = get_user_list();
                     metp_200(key);
                     if(*user_list){
                         size_t amount;
@@ -465,7 +466,7 @@ static unsigned metp_request_read(struct selector_key * key) {
                     write_message_to_buffer(conn->buffer_w, response);
                     state = METP_REQUEST_RESPONSE;
                 } else {
-                    char * logs = get_all_logs();
+                    const char * logs = get_all_logs();
                     metp_200(key);
                     if(*logs){
                         size_t amount;
@@ -497,12 +498,12 @@ static unsigned metp_request_read(struct selector_key * key) {
                 } else {
                     char metrics[256];
                     int length = snprintf(metrics, sizeof(metrics),
-                        "Connected Users: %f\nTotal Connections: %f\nTotal Data Transfered: %f\n",
+                        "Connected Users: %ld\nTotal Connections: %ld\nTotal Data Transfered: %ld\n",
                         metrics_get_active_connections(),
                         metrics_get_total_connections(),
                         metrics_get_total_data_transferred()
                     );
-                    if(length > 0 && length < sizeof(metrics)) {
+                    if (length > 0 && (size_t)length < sizeof(metrics)) {
                         metp_200(key);
                         size_t amount;//VER LO DE ADENTRO DEL IF
                         uint8_t * tor = buffer_write_ptr(conn->buffer_w, &amount);

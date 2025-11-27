@@ -126,6 +126,7 @@ static unsigned socks5_handshake_on_read(struct selector_key * key) {
                     return ERROR;
                 }
                 break;
+                break;
             case 1:
                 if((handshake->request.nmethods = aux) == 0){
                     return ERROR;
