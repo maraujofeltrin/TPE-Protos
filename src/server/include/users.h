@@ -10,8 +10,8 @@
 
 #include "socks5.h"
 
-/* Maximum number of users the server keeps in memory */
 #define SERVER_MAX_USERS 256
+#define MAX_LOGS 1024
 
 typedef enum{
     ROLE_ADMIN,
@@ -23,6 +23,14 @@ typedef struct user {
     char *password;
     user_role_t role;
 } user_t;
+
+typedef struct logs{
+    char * username;
+    char * ip;
+    char * dest;
+    uint64_t cant_bytes;
+    time_t time;
+}logs_t;
 
 /* Add a user to the in-memory list.
  * Returns 0 on success, -1 if the list is full, -2 if username already exists.
@@ -53,6 +61,8 @@ user_role_t get_user_role(const char *username);
  * Returns a static string with user list.
  */
 const char * get_user_list(void);
+
+const char * get_all_logs(void);
 
 #endif /* SERVER_USERS_H */
 

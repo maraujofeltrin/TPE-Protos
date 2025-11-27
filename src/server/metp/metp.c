@@ -25,6 +25,8 @@ static void metp_error_arrival(const unsigned state, struct selector_key * key);
 static unsigned metp_error_write(struct selector_key * key);
 static void metp_200(struct selector_key * key);
 
+static size_t buffer_size = BUFFER_MAX;
+
 
 static const struct state_definition metp_states_def[] = {
     [METP_HANDSHAKE] = {
@@ -70,6 +72,7 @@ static void write_message_to_buffer(buffer * b, const char *message) {
     for (size_t i = 0; i < len; i++) {
         buffer_write(b, (uint8_t)message[i]);
     }
+    selector_set_interest_key(key, OP_WRITE);
 }
 
 static unsigned send_response(struct selector_key * key, const char * message, unsigned next_state) {
@@ -268,7 +271,6 @@ static unsigned metp_write_auth(struct selector_key * key) {
         return METP_ERROR;
     }
     buffer_read_adv(wb, sent);
-
     if (!buffer_can_read(wb)) {
         if (conn->authenticated) {
             selector_set_interest_key(key, OP_READ);
@@ -298,7 +300,8 @@ static unsigned metp_request_read(struct selector_key * key) {
     ssize_t n = recv(key->fd, in, avail, 0);
     if (n < 0) {
         perror("metp recv");
-        //VER, IMPRIMIR ERROR
+        char * response = "500 Internal Server Error\n";
+        write_message_to_buffer(conn->buffer_w, response);
         selector_set_interest_key(key, OP_WRITE);
         return METP_ERROR;
     }
@@ -322,26 +325,213 @@ static unsigned metp_request_read(struct selector_key * key) {
         if(c == '\n' || idx == BUFFER_MAX - 1) {
             conn->parser.request_parser.text[idx] = '\0';
             conn->parser.request_parser.cantBytes = 0;
-
             char *response;
             char *command = strtok(conn->parser.request_parser.text, " \r\n");
             if(command && strcmp(command, "USERS") == 0) {
                 if(!permission_user_command(conn->cur_user, "USERS")) {
                     response = "403 Forbidden: Insufficient permissions\n";
+                    write_message_to_buffer(conn->buffer_w, response);
                     state = METP_REQUEST_RESPONSE;
                 } else {
                     char * user_list = get_user_list();
                     metp_200(key);
                     if(*user_list){
-                        return NULL;
+                        size_t amount;
+                        uint8_t * tor = buffer_write_ptr(conn->buffer_w, &amount);
+                        size_t l = strlen(user_list);
+                        if(l > amount) {
+                            l = amount;
+                        }
+                        memcpy(tor, user_list, l);
+                        buffer_write_adv(conn->buffer_w, l);
+                    } else{
+                        char * no_users = "\n";
+                        size_t amount;
+                        uint8_t * tor = buffer_write_ptr(conn->buffer_w, &amount);
+                        size_t l = 2;
+                        if(l > amount) {
+                            l = amount;
+                        }
+                        memcpy(tor, no_users, l);
+                        buffer_write_adv(conn->buffer_w, l);
                     }
+                    state = METP_REQUEST_RESPONSE;
                 }
             }
+            else if(command && strcmp(command, "ADD_USER") == 0) {
+                char * user_to_add = strtok(NULL, " \r\n");
+                char * pass_to_add = strtok(NULL, " \r\n");
+                if(!user_to_add || !pass_to_add) {
+                    response = "400 Bad Request: Missing username or password to add\n";
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                } else if(!permission_user_command(conn->cur_user, "ADD_USER")) {
+                    response = "403 Forbidden: Insufficient permissions\n";
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                } else {
+                    bool added = users_add(user_to_add, pass_to_add, ROLE_USER) == 0;
+                    if(added) {
+                        response = "200 OK: User added successfully\n";
+                    } else {
+                        response = "409 Conflict: User already exists\n";
+                    }
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                }
+            }else if(command && strcmp(command, "ROLE_SETTER")== 0){
+                char * user_to_set = strtok(NULL, " \r\n");
+                char * role_str = strtok(NULL, " \r\n");
+                if(!user_to_set || !role_str) {
+                    response = "400 Bad Request: Missing username or role to set\n";
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                } else if(!permission_user_command(conn->cur_user, "ROLE_SETTER")) {
+                    response = "403 Forbidden: Insufficient permissions\n";
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                } else {
+                    user_role_t new_role;
+                    if(strcmp(role_str, "ADMIN") == 0) {
+                        new_role = ROLE_ADMIN;
+                    } else if(strcmp(role_str, "USER") == 0) {
+                        new_role = ROLE_USER;
+                    } else {
+                        response = "400 Bad Request: Invalid role specified\n";
+                        write_message_to_buffer(conn->buffer_w, response);
+                        state = METP_REQUEST_RESPONSE;
+                        continue;
+                    }
+                    user_t * user = authenticate_user(user_to_set, "");
+                    if(user) {
+                        user->role = new_role;
+                        response = "200 OK: User role updated successfully\n";
+                    } else {
+                        response = "404 Not Found: User does not exist\n";
+                    }
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                }
+            }else if(command && strcmp(command, "BUFFER_NEWSIZE")==0){
+                char * size_str = strtok(NULL, " \r\n");
+                if(!size_str) {
+                    response = "400 Bad Request: Missing buffer size\n";
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                } else if(!permission_user_command(conn->cur_user, "BUFFER_NEWSIZE")) {
+                    response = "403 Forbidden: Insufficient permissions\n";
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                } else{
+                    size_t new_size = (size_t)atoi(size_str);
+                    if(new_size == 0 || new_size > BUFFER_MAX) {
+                        response = "400 Bad Request: Invalid buffer size\n";
+                    } else {
+                        buffer_size = new_size;
+                        response = "200 OK: Buffer size updated successfully\n";
+                    }
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                }
+            }
+            else if(command && strcmp(command, "DELETE_USER") == 0) {
+                char * user_to_delete = strtok(NULL, " \r\n");
+                if(!user_to_delete) {
+                    response = "400 Bad Request: Missing username to delete\n";
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                } else if(!permission_user_command(conn->cur_user, "DELETE_USER")) {
+                    response = "403 Forbidden: Insufficient permissions\n";
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                } else {
+                    bool deleted = remove_user(user_to_delete) == 0;
+                    if(deleted) {
+                        response = "200 OK: User deleted successfully\n";
+                    } else {
+                        response = "404 Not Found: User does not exist\n";
+                    }
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                }
+            }else if(command && strcmp(command, "QUIT") == 0) {
+                response = "200 OK: Closing connection\n";
+                write_message_to_buffer(conn->buffer_w, response);
+                conn->close = true;
+                state = METP_REQUEST_RESPONSE;
+            }else if(strcmp(command, "GET_LOGS") == 0){
+                if(!permission_user_command(conn->cur_user, "GET_LOGS")) {
+                    response = "403 Forbidden: Insufficient permissions\n";
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                } else {
+                    char * logs = get_all_logs();
+                    metp_200(key);
+                    if(*logs){
+                        size_t amount;
+                        uint8_t * tor = buffer_write_ptr(conn->buffer_w, &amount);
+                        size_t l = strlen(logs);
+                        if(l > amount) {
+                            l = amount;
+                        }
+                        memcpy(tor, logs, l);
+                        buffer_write_adv(conn->buffer_w, l);
+                    } else{
+                        char * no_logs = "\n";
+                        size_t amount;
+                        uint8_t * tor = buffer_write_ptr(conn->buffer_w, &amount);
+                        size_t l = 2;
+                        if(l > amount) {
+                            l = amount;
+                        }
+                        memcpy(tor, no_logs, l);
+                        buffer_write_adv(conn->buffer_w, l);
+                    }
+                    state = METP_REQUEST_RESPONSE;
+                }
+            }else if (command && strcmp(command, "GET_METRICS") == 0) {
+                if (!permission_user_command(conn->cur_user, "GET_ALL_METRICS")) {
+                    response = "403 Forbidden: Insufficient permissions\n";
+                    write_message_to_buffer(conn->buffer_w, response);
+                    state = METP_REQUEST_RESPONSE;
+                } else {
+                    char metrics[256];
+                    int length = snprintf(metrics, sizeof(metrics),
+                        "Connected Users: %f\nTotal Connections: %f\nTotal Data Transfered: %f\n",
+                        metrics_get_active_connections(),
+                        metrics_get_total_connections(),
+                        metrics_get_total_data_transferred()
+                    );
+                    if(length > 0 && length < sizeof(metrics)) {
+                        metp_200(key);
+                        size_t amount;//VER LO DE ADENTRO DEL IF
+                        uint8_t * tor = buffer_write_ptr(conn->buffer_w, &amount);
+                        size_t l = (size_t)length;
+                        if(l > amount) {
+                            l = amount;
+                        }
+                        memcpy(tor, metrics, l);
+                        buffer_write_adv(conn->buffer_w, l);
+                        state = METP_REQUEST_RESPONSE;
+                    }
+                    else {
+                        return send_response(key, "500 Internal Server Error\n", METP_ERROR);
+                    }
+                    
+                }
+            }
+            else {
+                response = "400 Bad Request: Unknown Command\n";
+                write_message_to_buffer(conn->buffer_w, response);
+                state = METP_REQUEST_RESPONSE;
+            }
+            conn->parser.request_parser.cantBytes = 0;
+            break;
         }
         
-
     }
-    return METP_REQUEST;
+    selector_set_interest_key(key, OP_WRITE);
+    return state;
 }
 
 
@@ -354,9 +544,7 @@ static void metp_200(struct selector_key * key){
     memcpy(tor, message, l);
     buffer_write_adv(connection->buffer_w, l);
     selector_set_interest_key(key, OP_WRITE);
-
 }
-
 
 static unsigned metp_request_response_write(struct selector_key * key) {
     metp_connection_t *connection = (metp_connection_t *)key->data;

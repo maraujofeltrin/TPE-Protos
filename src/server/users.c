@@ -6,20 +6,20 @@
 
 #include "users.h"
 
-/* Simple in-memory users storage */
 static user_t users_store[SERVER_MAX_USERS];
 static size_t users_store_count = 0;
+static int cant_logs = 0, pos_logs = 0;
+static logs_t logs[MAX_LOGS];
 
-int users_add(const char *username, const char *password, user_role_t role) {
+int users_add(const char * username, const char * password, user_role_t role) {
 	if (!username || !password) return -1;
-	/* check duplicate */
 	for (size_t i = 0; i < users_store_count; ++i) {
 		if (strcmp(users_store[i].username, username) == 0) {
-			return -2; /* already exists */
+			return -2; 
 		}
 	}
 	if (users_store_count >= SERVER_MAX_USERS) {
-		return -1; /* full */
+		return -1;
 	}
 	char *uname = strdup(username);
 	if (uname == NULL) return -1;
@@ -35,7 +35,7 @@ int users_add(const char *username, const char *password, user_role_t role) {
 	return 0;
 }
 
-int remove_user(const char *username) {
+int remove_user(const char * username) {
     if(!username) return -1;
     for (size_t i = 0; i < users_store_count; ++i) {
         if (strcmp(users_store[i].username, username) == 0) {
@@ -43,13 +43,13 @@ int remove_user(const char *username) {
             free(users_store[i].password);
             users_store[i] = users_store[users_store_count - 1];
             users_store_count--;
-            return 0; /* success */
+            return 0;
         }
     }
-    return -1; /* not found */
+    return -1;
 }
 
-user_t * authenticate_user(const char *username, const char *password) {
+user_t * authenticate_user(const char * username, const char * password) {
 	if(!username || !password) return NULL;
 	for (size_t i = 0; i < users_store_count; ++i) {
 		if (strcmp(users_store[i].username, username) == 0) {
@@ -63,21 +63,20 @@ user_t * authenticate_user(const char *username, const char *password) {
 	return NULL;
 }
 
-bool permission_user_command(char *user, const char *command) {
+bool permission_user_command(char * user, const char * command) {
 	if (!user || !command) return false;
 	
 	user_role_t role = get_user_role(user);
 	if (role == ROLE_ADMIN) {
-		return true; /* admin can do anything */
+		return true; 
 	}
-	/* for regular users, only allow LIST command */
 	if (strcmp(command, "LIST") == 0) {
 		return true;
 	}	
 	return false;
 }
 
-user_role_t get_user_role(const char *username) {
+user_role_t get_user_role(const char * username) {
 	if (!username) return -1;
 	for (size_t i = 0; i < users_store_count; ++i) {
 		if (strcmp(users_store[i].username, username) == 0) {
@@ -103,5 +102,35 @@ const char * get_user_list() {
 		pos += written;
 	}
 	return list;
+}
+
+const char * get_all_logs(void){
+	char buf[MAX_LOGS];		//VER EL NUMERO 
+	int p;
+
+	for(int i = 0; i < cant_logs; i++){
+		int j = (pos_logs - cant_logs + i) % MAX_LOGS;
+		struct tm * timeInf = gmtime(&logs[j].time);
+
+		//año - mes - dia - hora - min - seg - user - ip - dest - cant bytes
+		int w = snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d %s %s %s %lu\n",
+			timeInf->tm_year + 1900,
+			timeInf->tm_mon + 1,
+			timeInf->tm_mday,
+			timeInf->tm_hour,
+			timeInf->tm_min,
+			timeInf->tm_sec,
+			logs[j].username,
+			logs[j].ip,
+			logs[j].dest,
+			logs[j].cant_bytes
+		);
+
+		if (w < 0 || w >= (int)(sizeof(buf) - p)) {
+			break;
+		}
+		p += w;
+	}
+	return buf;
 }
 
