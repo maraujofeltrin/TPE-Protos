@@ -34,7 +34,6 @@ struct state_machine {
     const struct state_definition *current;
 };
 
-/* avoid defining globals in headers; declare extern if some unit needs it */
 extern struct selector_key *key;
 
 /**
