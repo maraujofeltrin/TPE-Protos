@@ -3,12 +3,12 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include "buffer.h"
+#include "../../utils/include/buffer.h"
+
 #define AUTH_VERSION 0x01
 
 static const uint8_t AUTH_FAILED = 0x00;
 static const uint8_t AUTH_SUCCESS = 0x01;
-
 
 typedef enum auth_index{
     AUTH_STATE_VERSION,

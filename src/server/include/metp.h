@@ -7,7 +7,7 @@
 
 
 #define USER_MAX 32
-#define BUFFER_MAX 512
+#define BUFFER_MAX 1024 //VER NUMEROS
 
 typedef enum {
     METP_HANDSHAKE,
@@ -20,9 +20,10 @@ typedef enum {
     METP_TERMINATED
 } metp_state_t;
 
-void metp_read(struct selector_key *key);
-void metp_write(struct selector_key *key);
-void metp_block(struct selector_key *key);
+typedef struct metp_parser{
+    char text[BUFFER_MAX];
+    size_t cantBytes;
+}metp_parser;
 
 typedef struct metp_connection {
     int fd_client;
@@ -36,7 +37,7 @@ typedef struct metp_connection {
 
     union{
         metp_parser auth_parser;
-        metp_parser command_parser;
+        metp_parser request_parser;
     }parser;
 
     char * to_send;
@@ -47,10 +48,7 @@ typedef struct metp_connection {
     buffer * buffer_w;
 }metp_connection_t;
 
-typedef struct metp_parser{
-    char text[BUFFER_MAX];
-    size_t cantBytes
-}metp_parser;
+const struct state_definition * get_metp_state_definition(void);
 
 
 #endif

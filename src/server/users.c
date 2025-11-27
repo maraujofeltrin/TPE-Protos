@@ -54,11 +54,54 @@ user_t * authenticate_user(const char *username, const char *password) {
 	for (size_t i = 0; i < users_store_count; ++i) {
 		if (strcmp(users_store[i].username, username) == 0) {
 			if (strcmp(users_store[i].password, password) == 0) {
-				return &users_store[i]; /* success */
+				return &users_store[i];
 			} else {
-				return NULL; /* wrong password */
+				return NULL;
 			}
 		}
 	}
 	return NULL;
 }
+
+bool permission_user_command(char *user, const char *command) {
+	if (!user || !command) return false;
+	
+	user_role_t role = get_user_role(user);
+	if (role == ROLE_ADMIN) {
+		return true; /* admin can do anything */
+	}
+	/* for regular users, only allow LIST command */
+	if (strcmp(command, "LIST") == 0) {
+		return true;
+	}	
+	return false;
+}
+
+user_role_t get_user_role(const char *username) {
+	if (!username) return -1;
+	for (size_t i = 0; i < users_store_count; ++i) {
+		if (strcmp(users_store[i].username, username) == 0) {
+			return users_store[i].role;
+		}
+	}
+	return -1;
+}
+
+const char * get_user_list() {
+	static char list[4096];
+	int pos = 0;
+	list[0] = '\0';
+
+	for (size_t i = 0; i < users_store_count; ++i) {
+		const char *role_str = (users_store[i].role == ROLE_ADMIN) ? "admin" : "user";
+		int written = snprintf(list + pos, sizeof(list) - pos,
+							   "%s %s\n",
+							   users_store[i].username,
+							   role_str);
+		if (written < 0 || written >= (int)(sizeof(list) - pos))
+			break;
+		pos += written;
+	}
+	return list;
+}
+

@@ -1,11 +1,11 @@
 #ifndef SOCKS5_H_
 #define SOCKS5_H_
 
-#include "selector.h"
-#include "stm.h"
+#include "../../utils/include/selector.h"
+#include "../../utils/include/stm.h"
+#include "../../utils/include/buffer.h"
 #include "builder.h"
 #include "handshake.h"
-#include "buffer.h"
 #include "authentication.h"
 #include <pthread.h>
 #include <netdb.h>
@@ -29,7 +29,6 @@ typedef enum {
     AUTHENTICATION_RESPONSE
 } socks5_state_t;
 
-
 typedef struct socks5_connection {
     int client_fd;
     int target_fd;
@@ -52,8 +51,6 @@ typedef struct socks5_connection {
     uint8_t auth_status;
     struct addrinfo * req_address;
     struct addrinfo * cur_req_address;
-
 } socks5_connection_t;
-
 
 #endif

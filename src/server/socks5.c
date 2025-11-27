@@ -12,6 +12,7 @@
 #include "selector.h"
 #include "include/authentication.h"
 #include "include/users.h"
+#include "include/builder.h"
 
 
 // Declaraciones de funciones static
@@ -305,7 +306,7 @@ static void * dns_resolve_thread(void * arg){
         .ai_socktype = SOCK_STREAM
     };
 
-    int res = getaddrinfo((char*)connection->parser.request.request.dest_address.address.domainname, s, &hints, &connection->req_address);
+    int res = getaddrinfo((char*)connection->parser.request.request.dest_address.address.domainname.addr, s, &hints, &connection->req_address);
 
     if(res != 0){
         connection->req_address = NULL;
