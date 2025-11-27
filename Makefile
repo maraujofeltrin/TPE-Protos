@@ -19,7 +19,7 @@ BIN_DIR = $(BUILD_DIR)/bin
 
 # Archivos fuente
 UTILS_SOURCES = $(wildcard $(UTILS_DIR)/*.c)
-SERVER_SOURCES = $(wildcard $(SERVER_DIR)/*.c)
+SERVER_SOURCES = $(wildcard $(SERVER_DIR)/*.c) $(wildcard $(SERVER_DIR)/*/*.c)
 CLIENT_SOURCES = $(wildcard $(CLIENT_DIR)/*.c)
 TEST_SOURCES = $(wildcard $(TEST_DIR)/*.c)
 
@@ -70,6 +70,7 @@ $(OBJ_DIR)/utils/%.o: $(UTILS_DIR)/%.c | $(OBJ_DIR)/utils
 
 # Compilar archivos objeto del servidor (cuando existan)
 $(OBJ_DIR)/server/%.o: $(SERVER_DIR)/%.c | $(OBJ_DIR)/server
+	mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(INCLUDE_PATHS) -c $< -o $@
 
 # Compilar archivos objeto del cliente (cuando existan)

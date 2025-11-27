@@ -432,13 +432,11 @@ finally:
 selector_status
 selector_set_interest_key(struct selector_key *key, fd_interest i) {
     selector_status ret;
-
     if(NULL == key || NULL == key->s || INVALID_FD(key->fd)) {
         ret = SELECTOR_IARGS;
     } else {
         ret = selector_set_interest(key->s, key->fd, i);
     }
-
     return ret;
 }
 

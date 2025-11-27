@@ -18,5 +18,7 @@ obj/
 .idea/
 background.sh
 Dockerfile
-run.sh
 /build
+
+# Runtime logs and pid
+logs/
