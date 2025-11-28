@@ -4,12 +4,34 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include "users.h"
+#include "include/users.h"
 
 static user_t users_store[SERVER_MAX_USERS];
 static size_t users_store_count = 0;
 static int cant_logs = 0, pos_logs = 0;
 static logs_t logs[MAX_LOGS];
+
+void users_init(void) {
+	users_store_count = 0;
+	cant_logs = 0;
+	pos_logs = 0;
+
+	for(int i = 0; i < MAX_LOGS; i++){
+		logs[i].username = NULL;
+		logs[i].ip = NULL;
+		logs[i].dest = NULL;
+		logs[i].cant_bytes = 0;
+		logs[i].time = 0;
+	}
+
+	for (int i = 0; i < SERVER_MAX_USERS; i++)
+	{
+		users_store[i].username = NULL;
+		users_store[i].password = NULL;
+		users_store[i].role = ROLE_INACTIVE;
+	}
+	
+}
 
 int users_add(const char * username, const char * password, user_role_t role) {
 	if (!username || !password) return -1;
@@ -134,3 +156,13 @@ const char * get_all_logs(void){
 	return buf;
 }
 
+void free_users(void) {
+	for (size_t i = 0; i < users_store_count; ++i) {
+		free(users_store[i].username);
+		free(users_store[i].password);
+		users_store[i].username = NULL;
+		users_store[i].password = NULL;
+		users_store[i].role = ROLE_INACTIVE;
+	}
+	users_store_count = 0;
+}

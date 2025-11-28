@@ -7,7 +7,7 @@
 
 
 #define USER_MAX 32
-#define BUFFER_MAX 1024 //VER NUMEROS
+#define BUFFER_MAX 4096
 
 typedef enum {
     METP_HANDSHAKE,
@@ -30,6 +30,7 @@ typedef struct metp_connection {
     bool authenticated;
     bool conected;
     bool close;
+    bool valid;
     
     struct state_machine stm;
 
@@ -49,6 +50,6 @@ typedef struct metp_connection {
 }metp_connection_t;
 
 const struct state_definition * get_metp_state_definition(void);
-
+size_t get_metp_buffer_size();
 
 #endif

@@ -15,7 +15,8 @@
 
 typedef enum{
     ROLE_ADMIN,
-    ROLE_USER
+    ROLE_USER,
+    ROLE_INACTIVE
 } user_role_t;
 
 typedef struct user {
@@ -63,6 +64,10 @@ user_role_t get_user_role(const char *username);
 const char * get_user_list(void);
 
 const char * get_all_logs(void);
+
+void free_users(void);
+
+void users_init(void);
 
 #endif /* SERVER_USERS_H */
 

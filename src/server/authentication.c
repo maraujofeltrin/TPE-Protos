@@ -45,7 +45,7 @@ auth_index authentication_parse(struct authentication_context * auth_ctx, buffer
             case AUTH_STATE_PASSWD:
                 auth_ctx->request.password[auth_ctx->bytes_read++] = aux;
                 if(auth_ctx->bytes_read == auth_ctx->request.plen) {
-                    return AUTH_STATE_PASSWD; // end parsing
+                    return AUTH_STATE_PASSWD;
                 }
                 break;
             case AUTH_ERROR_DEFAULT:

@@ -27,15 +27,11 @@ if [ "${1-}" = "stop" ]; then
     exit 0
 fi
 
-echo "Building server..."
-make clean
-make server
-
 if [ ! -x "$BIN" ]; then
     echo "Binary not found or not executable: $BIN" >&2
+    echo "Run 'make server' first to build the server." >&2
     exit 1
 fi
-
 
 echo "Starting server (logging to $LOGFILE)"
 # ensure log dir exists
@@ -44,6 +40,8 @@ mkdir -p "$LOG_DIR"
 pkill -f "$BIN" || true
 
 # start server, pipe stderr+stdout to log and background
+export ASAN_OPTIONS="abort_on_error=0:halt_on_error=0:print_stats=1:log_path=./logs/asan"
+export LSAN_OPTIONS="print_suppressions=0:log_path=./logs/lsan"
 nohup "$BIN" 2>&1 | tee "$LOGFILE" &
 srv_pid=$!
 echo "$srv_pid" > "$PIDFILE"

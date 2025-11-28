@@ -14,6 +14,7 @@
 #include <stdbool.h>
 
 #define SOCKS5_VERSION 0x05
+#define BUFFER_MAX 4096
 
 //VER SI FALTAN MAS
 typedef enum {
@@ -26,7 +27,8 @@ typedef enum {
     REQUEST_CONNECT,
     REQUEST_BIND,
     AUTHENTICATION,
-    AUTHENTICATION_RESPONSE
+    AUTHENTICATION_RESPONSE,
+    REQUEST_RESOLVER
 } socks5_state_t;
 
 typedef struct socks5_connection {
@@ -34,8 +36,10 @@ typedef struct socks5_connection {
     int target_fd;
     socks5_state_t state;
     void *data;
+    uint64_t bytes_sent;
     char target_addr[512];
     char client_ip[64];
+    uint8_t raw_read_c[BUFFER_MAX], raw_write_c[BUFFER_MAX], raw_read_p[BUFFER_MAX], raw_write_p[BUFFER_MAX];
     struct state_machine stm;
     union{
         handshake_context_t handshake;
@@ -47,10 +51,13 @@ typedef struct socks5_connection {
     int remote_domain;
     socklen_t remote_address_len;
     struct sockaddr_storage remote_address;
+    bool tobe_closed;
     struct user * user;
     uint8_t auth_status;
     struct addrinfo * req_address;
     struct addrinfo * cur_req_address;
 } socks5_connection_t;
+
+const struct socks5_state_definition * get_socks5_state_definition();
 
 #endif

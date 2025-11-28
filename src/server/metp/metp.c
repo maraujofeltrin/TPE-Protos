@@ -11,7 +11,6 @@
 #include "../include/users.h"
 #include "../include/metrics.h"
 
-#define BUFFER_MAX 1024
 
 static unsigned send_response(struct selector_key *key, const char *message, unsigned next_state);
 static void write_message_to_buffer(buffer *, const char *message);
@@ -596,4 +595,8 @@ static unsigned metp_request_response_write(struct selector_key * key) {
     }
     
     return METP_REQUEST_RESPONSE;
+}
+
+size_t get_metp_buffer_size() {
+    return buffer_size;
 }

@@ -13,19 +13,18 @@ int parse_socks5_request(socks5_request_parser_t * request, const uint8_t * buf,
     request->reserved = buf[offset++];
     request->dest_address.atyp = buf[offset++];
     if(request->version != SOCKS5_VERSION) {
-        return -1; // Invalid version
+        return -1; 
     }
     if(request->reserved != 0x00) {
-        return -1; // Invalid reserved byte
+        return -1; 
     }
     switch(request->dest_address.atyp) {
         case SOCKS5_ATYP_IPV4:
             if(len < offset + 4 + 2) {
-                return -1; // Not enough data
+                return -1; 
             }
             memcpy(request->dest_address.address.ipv4, &buf[offset], 4);
             offset += 4;
-            /* read port (2 bytes) */
             request->dest_address.port = (buf[offset] << 8) | buf[offset + 1];
             offset += 2;
             break;
@@ -39,7 +38,6 @@ int parse_socks5_request(socks5_request_parser_t * request, const uint8_t * buf,
             }
             memcpy(request->dest_address.address.domainname.addr, &buf[offset], request->dest_address.address.domainname.length);
             offset += request->dest_address.address.domainname.length;
-            /* read port (2 bytes) */
             request->dest_address.port = (buf[offset] << 8) | buf[offset + 1];
             offset += 2;
             break;
@@ -49,7 +47,6 @@ int parse_socks5_request(socks5_request_parser_t * request, const uint8_t * buf,
             }
             memcpy(request->dest_address.address.ipv6, &buf[offset], 16);
             offset += 16;
-            /* read port (2 bytes) */
             request->dest_address.port = (buf[offset] << 8) | buf[offset + 1];
             offset += 2;
             break;
@@ -60,6 +57,7 @@ int parse_socks5_request(socks5_request_parser_t * request, const uint8_t * buf,
     *parsed_bytes = offset;
     return 0;
 }
+
 
 int socks5_response(socks5_response_parser_t * response, uint8_t ** out_buf, size_t * out_len) {
     size_t addr_len = 0;
@@ -80,7 +78,7 @@ int socks5_response(socks5_response_parser_t * response, uint8_t ** out_buf, siz
     *out_len = 4 + addr_len + 2; // version, response, reserved, atyp, address, port
     *out_buf = malloc(*out_len);
     if(*out_buf == NULL) {
-        return -1; // Memory allocation error
+        return -1; 
     }
 
     size_t offset = 0;

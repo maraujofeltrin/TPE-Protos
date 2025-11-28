@@ -65,6 +65,7 @@ typedef struct handshake_parser{
 
 int parse_socks5_request(socks5_request_parser_t * request, const uint8_t * buf, size_t len, size_t * parsed_bytes);
 int socks5_response(socks5_response_parser_t * response, uint8_t ** out_buf, size_t * out_len);
+
 #endif
 
 
