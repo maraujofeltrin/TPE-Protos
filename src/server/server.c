@@ -78,27 +78,48 @@ static void socks5_handle_close(struct selector_key *key){
     if (key == NULL || key->data == NULL){
         return;
     }
+
     socks5_connection_t * connection = (socks5_connection_t *) key->data;
     if(connection == NULL){
         return;
     }
+
+
+    if (connection->tobe_closed) {
+        return;
+    }
+    connection->tobe_closed = true;
+
+    if (connection->client_fd >= 0) {
+        selector_unregister_fd(key->s, connection->client_fd);
+    }
+    if (connection->target_fd >= 0 && connection->target_fd != connection->client_fd) {
+        selector_unregister_fd(key->s, connection->target_fd);
+    }
+
     stm_handler_close(&connection->stm, key);
-    
+
     if(connection->target_fd >= 0){
         close(connection->target_fd);
         connection->target_fd = -1;
     }
-    if(connection->client_fd >= 0 && connection->client_fd != key->fd){
+    if(connection->client_fd >= 0){
         close(connection->client_fd);
         connection->client_fd = -1;
     }
+
     free(connection);
     key->data = NULL;  
 }
 
 static void socks5_handle_block(struct selector_key *key){
     socks5_connection_t * connection = (socks5_connection_t *) key->data;
+    if (!connection) return;
+
     unsigned int next = stm_handler_block(&connection->stm, key);
+
+    if (!key->data) return;
+    connection = (socks5_connection_t *) key->data;
     connection->stm.current = &connection->stm.states[next]; 
 }
 
@@ -111,6 +132,9 @@ static void metp_handle_read(struct selector_key *key){
         return;
     }
     unsigned next =  stm_handler_read(&connection->stm, key);
+
+    if (!key->data) return;
+    connection = (metp_connection_t *) key->data;
     connection->stm.current = &connection->stm.states[next];
 }
 
@@ -125,6 +149,8 @@ static void metp_handle_write(struct selector_key *key){
         metp_handle_close(key);
         return;
     }
+    if (!key->data) return;
+    connection = (metp_connection_t *) key->data;
     connection->stm.current = &connection->stm.states[next];
 }
 
@@ -143,7 +169,11 @@ static void metp_handle_close(struct selector_key *key){
 
 static void metp_handle_block(struct selector_key *key){
     metp_connection_t * connection = (metp_connection_t *) key->data;
+    if (!connection) return;
+
     unsigned int next = stm_handler_block(&connection->stm, key);
+    if (!key->data) return;
+    connection = (metp_connection_t *) key->data;
     connection->stm.current = &connection->stm.states[next];
 }
 
@@ -271,24 +301,18 @@ static void socks5_handle_read(struct selector_key *key){
         return;
     }
     
-    // Hacer una copia de punteros críticos para verificar integridad
-    void *stm_states = conn->stm.states;
-    if (!stm_states) {
-        socks5_handle_close(key);
-        return;
-    }
-    
     int next_state_socks5 = stm_handler_read(&conn->stm, key);
+
+    
+    if (!key->data) return;
+
     if(next_state_socks5 == CLOSED){
         socks5_handle_close(key);
         return;
     }
-    
-    // Solo acceder a conn si no fue liberada
-    if (key->data) {
-        conn = (socks5_connection_t *) key->data;
-        conn->stm.current = &conn->stm.states[next_state_socks5];
-    }
+
+    conn = (socks5_connection_t *) key->data;
+    conn->stm.current = &conn->stm.states[next_state_socks5];
 }
 
 static void socks5_handle_accept_connection(struct selector_key *key){
@@ -345,7 +369,7 @@ static void socks5_handle_accept_connection(struct selector_key *key){
 
 int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN); 
-
+    printf("Starting SOCKS5 server...\n");
     struct socks5args args;
     parse_args(argc, argv, &args);
 
