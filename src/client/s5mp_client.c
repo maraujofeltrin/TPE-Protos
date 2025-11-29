@@ -1,0 +1,238 @@
+#include "include/s5mp_client.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/socket.h>
+
+int sockfd = -1;
+bool connected = false;
+
+// Funciones auxiliares para enviar y recibir
+static ssize_t send_full(int fd, const char *buf, size_t len) {
+    size_t total = 0;
+    while (total < len) {
+        ssize_t n = send(fd, buf + total, len - total, 0);
+        if (n <= 0) return n;
+        total += n;
+    }
+    return total;
+}
+
+static ssize_t recv_line(int fd, char *buf, size_t max_len) {
+    size_t i = 0;
+    while (i < max_len - 1) {
+        ssize_t n = recv(fd, buf + i, 1, 0);
+        if (n <= 0) return n;
+        if (buf[i] == '\n') {
+            buf[i + 1] = '\0';
+            return i + 1;
+        }
+        i++;
+    }
+    buf[i] = '\0';
+    return i;
+}
+
+static command_status_types parse_response_code(const char *line);
+
+void close_connection(){
+    if(connected){
+        close(sockfd);
+        connected = false;
+        sockfd = -1;
+    }
+}
+
+command_status_types add_user_client(client_credentials_t new_user){
+    if(!connected){
+        return SERVER_ERROR_RESP;
+    }
+    char aux[128];
+    int n = snprintf(aux, sizeof(aux), "ADD-USER %s %s %s\n", new_user.username, new_user.password, new_user.role);
+    if(n < 0 || n >= (int)sizeof(aux)) return COMMAND_ERROR_RESP;
+    if(send_full(sockfd, aux, strlen(aux)) <= 0) return SERVER_ERROR_RESP;
+    char line[BUFFER_MAX];
+    if(recv_line(sockfd, line, sizeof(line)) <= 0) return SERVER_ERROR_RESP;
+    return parse_response_code(line);
+}
+
+command_status_types set_size_buffer_client(uint64_t size){
+    if(!connected){
+        return SERVER_ERROR_RESP;
+    }
+    char aux[64];
+    int n = snprintf(aux, sizeof(aux), "SET-BUFFER-SIZE %lu\n", size);
+    if(n < 0 || n >= (int)sizeof(aux)) return COMMAND_ERROR_RESP;
+    if(send_full(sockfd, aux, strlen(aux)) <= 0) return SERVER_ERROR_RESP;
+    char line[BUFFER_MAX];
+    if(recv_line(sockfd, line, sizeof(line)) <= 0) return SERVER_ERROR_RESP;
+    return parse_response_code(line);
+}
+
+command_status_types remove_user_client(const char * name){
+    if(!connected){
+        return SERVER_ERROR_RESP;
+    }
+    char aux[64];
+    int n = snprintf(aux, sizeof(aux), "REMOVE-USER %s\n", name);
+    if(n < 0 || n >= (int)sizeof(aux)) return COMMAND_ERROR_RESP;
+    if(send_full(sockfd, aux, strlen(aux)) <= 0) return SERVER_ERROR_RESP;
+    char line[BUFFER_MAX];
+    if(recv_line(sockfd, line, sizeof(line)) <= 0) return SERVER_ERROR_RESP;
+    return parse_response_code(line);
+}
+
+command_status_types set_role_client(const char *username, const char *role) {
+    if (!connected) {
+        return SERVER_ERROR_RESP;
+    }
+    char buf[128];
+    int n = snprintf(buf, sizeof(buf), "SET-ROLE %s %s\n", username, role);
+    if (n < 0 || n >= (int)sizeof(buf)){ 
+        return COMMAND_ERROR_RESP;
+    }
+    if (send_full(sockfd, buf, strlen(buf)) <= 0){
+         return SERVER_ERROR_RESP;
+    }
+    char line[BUFFER_MAX];
+    if (recv_line(sockfd, line, sizeof(line)) <= 0){ 
+        return SERVER_ERROR_RESP;
+    }
+    return parse_response_code(line);
+}
+
+command_status_types get_all_users(user_list_t * list){
+    if(!connected){
+        return SERVER_ERROR_RESP;
+    }
+    char l[BUFFER_MAX];
+    if(send_full(sockfd, "GET-USERS\n", 10) <= 0) return SERVER_ERROR_RESP;
+    if(recv_line(sockfd, l, sizeof(l)) <= 0) return SERVER_ERROR_RESP;
+    if(strncmp(l, "200", 3) == 0){
+        size_t c = 0, cap = 16;
+        list->users = malloc(cap * sizeof(client_credentials_t));
+        list->cant_users = 0;
+
+        while(recv_line(sockfd, l, sizeof(l)) > 0){
+            if(strcmp(l, ".\n") == 0) break;
+            char username[64], password[64], role[16];
+            if(sscanf(l, "%63s %63s %15s", username, password, role) != 3){
+                free(list->users);
+                return COMMAND_ERROR_RESP;
+            }
+            strncpy(list->users[c].username, username, 32);
+            strncpy(list->users[c].password, password, 32);
+            strncpy(list->users[c].role, role, 16);
+            c++;
+        }
+
+        list->cant_users = c;
+        return SUCCESS_RESP;
+    }
+    else if(strncmp(l, "403", 3) == 0){
+        return AUTHENTICATION_ERROR_RESP;
+    }
+    else{
+        return COMMAND_ERROR_RESP;
+    }
+}
+
+command_status_types get_logs_client(logs_list_t * list){
+    if(!connected){
+        return SERVER_ERROR_RESP;
+    }
+    char l[BUFFER_MAX];
+    if(send_full(sockfd, "GET-LOGS\n", 9) <= 0) return SERVER_ERROR_RESP;
+    if(recv_line(sockfd, l, sizeof(l)) <= 0) return SERVER_ERROR_RESP;
+    if(strncmp(l, "200", 3) == 0){
+        size_t c = 0, cap = 16;
+        list->logs = malloc(cap * sizeof(logs_t));
+        list->cant_logs = 0;
+
+        while(recv_line(sockfd, l, sizeof(l)) > 0){
+            if(strcmp(l, ".\n") == 0) break;
+            char username[64], ip[64], dest[128];
+            uint64_t bytes;
+            if(sscanf(l, "%63s %63s %127s %lu", username, ip, dest, &bytes) != 4){
+                free(list->logs);
+                return COMMAND_ERROR_RESP;
+            }
+            // Asignar memoria para strings y copiar
+            list->logs[c].username = malloc(strlen(username) + 1);
+            list->logs[c].ip = malloc(strlen(ip) + 1);
+            list->logs[c].dest = malloc(strlen(dest) + 1);
+            strcpy(list->logs[c].username, username);
+            strcpy(list->logs[c].ip, ip);
+            strcpy(list->logs[c].dest, dest);
+            list->logs[c].cant_bytes = bytes;
+            list->logs[c].time = time(NULL);
+            c++;
+        }
+
+        list->cant_logs = c;
+        return SUCCESS_RESP;
+    }
+    else if(strncmp(l, "403", 3) == 0){
+        return AUTHENTICATION_ERROR_RESP;
+    }
+    else{
+        return COMMAND_ERROR_RESP;
+    }
+}
+
+command_status_types get_metrics_client(client_metrics_t * metrics){
+    if(!connected){
+        return SERVER_ERROR_RESP;
+    }
+    char l[BUFFER_MAX];
+    
+    if(send_full(sockfd, "GET-METRICS\n", strlen("GET-METRICS\n")) <= 0) return SERVER_ERROR_RESP;
+    
+    if(recv_line(sockfd, l, sizeof(l)) <= 0 || strncmp(l, "200", 3) != 0) return SERVER_ERROR_RESP;
+    
+    while (recv_line(sockfd, l, sizeof(l)) > 0)
+    {
+        if(strcmp(l, ".\n") == 0) break;
+        char value[64];
+        if(strncmp(l, "total_connections", 17) == 0){
+            metrics->total_connections = strtoull(value + 17, NULL, 10);
+        }
+        else if(strncmp(l, "total_bytes_transferred", 23) == 0){
+            metrics->total_bytes_transferred = strtoull(value + 23, NULL, 10);
+        } 
+        else if(strncmp(l, "active_connections", 18) == 0){
+            metrics->active_connections = strtoull(value + 18, NULL, 10);  
+        }
+    }
+
+    return SUCCESS_RESP;
+}
+
+void free_user_list(user_list_t * list){
+    if(list->users != NULL){
+        free(list->users);
+        list->users = NULL;
+        list->cant_users = 0;
+    }
+}
+
+void free_log_list(logs_list_t * list){
+    if(list->logs != NULL){
+        for(uint64_t i = 0; i < list->cant_logs; i++){
+            free(list->logs[i].username);
+            free(list->logs[i].ip);
+            free(list->logs[i].dest);
+        }
+        free(list->logs);
+        list->logs = NULL;
+        list->cant_logs = 0;
+    }
+}
+
+static command_status_types parse_response_code(const char *line) {
+    if(strncmp(line, "200", 3) == 0)      return SUCCESS_RESP;
+    if(strncmp(line, "400", 3) == 0)      return COMMAND_ERROR_RESP;
+    if(strncmp(line, "403", 3) == 0)      return AUTHENTICATION_ERROR_RESP;
+    return SERVER_ERROR_RESP;
+}

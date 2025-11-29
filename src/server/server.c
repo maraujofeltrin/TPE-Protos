@@ -14,7 +14,7 @@
 #include "../utils/include/selector.h"
 #include "../utils/include/buffer.h"
 #include "include/socks5.h"
-#include "include/metp.h"
+#include "include/s5mp.h"
 #include "include/users.h"
 #include "include/metrics.h"
 #include "../utils/include/args.h"
@@ -27,16 +27,16 @@ static void socks5_handle_block(struct selector_key *key);
 static void socks5_handle_accept_connection(struct selector_key *key);
 
 
-// METP handlers
-static void metp_handle_read(struct selector_key *key);
-static void metp_handle_write(struct selector_key *key);
-static void metp_handle_close(struct selector_key *key);
-static void metp_handle_block(struct selector_key *key);
-static void metp_handle_accept_connection(int server_fd, fd_selector selector);
+// S5MP handlers
+static void s5mp_handle_read(struct selector_key *key);
+static void s5mp_handle_write(struct selector_key *key);
+static void s5mp_handle_close(struct selector_key *key);
+static void s5mp_handle_block(struct selector_key *key);
+static void s5mp_handle_accept_connection(int server_fd, fd_selector selector);
 
 // Listeners
 static int create_listeners(const char *addr, const char *port);
-static void metp_accept_wrapper(struct selector_key *key);
+static void s5mp_accept_wrapper(struct selector_key *key);
 
 static const struct fd_handler socks5_handler = {
     .handle_read = socks5_handle_read,
@@ -45,11 +45,11 @@ static const struct fd_handler socks5_handler = {
     .handle_close = socks5_handle_close,
 };
 
-static const struct fd_handler metp_handler = {
-    .handle_read = metp_handle_read,
-    .handle_write = metp_handle_write,
-    .handle_block = metp_handle_block,
-    .handle_close = metp_handle_close,
+static const struct fd_handler s5mp_handler = {
+    .handle_read = s5mp_handle_read,
+    .handle_write = s5mp_handle_write,
+    .handle_block = s5mp_handle_block,
+    .handle_close = s5mp_handle_close,
 };
 
 
@@ -125,37 +125,37 @@ static void socks5_handle_block(struct selector_key *key){
 
 
 
-// METP handlers
-static void metp_handle_read(struct selector_key *key){
-    metp_connection_t * connection = (metp_connection_t *) key->data;
+// S5MP handlers
+static void s5mp_handle_read(struct selector_key *key){
+    s5mp_connection_t * connection = (s5mp_connection_t *) key->data;
     if(connection == NULL || !connection->valid){
         return;
     }
     unsigned next =  stm_handler_read(&connection->stm, key);
 
     if (!key->data) return;
-    connection = (metp_connection_t *) key->data;
+    connection = (s5mp_connection_t *) key->data;
     connection->stm.current = &connection->stm.states[next];
 }
 
-static void metp_handle_write(struct selector_key *key){
-    metp_connection_t * connection = (metp_connection_t *) key->data;
+static void s5mp_handle_write(struct selector_key *key){
+    s5mp_connection_t * connection = (s5mp_connection_t *) key->data;
     if(connection == NULL){
         return;
     }
 
     unsigned next =  stm_handler_write(&connection->stm, key);
-    if(next == METP_TERMINATED){
-        metp_handle_close(key);
+    if(next == S5MP_TERMINATED){
+        s5mp_handle_close(key);
         return;
     }
     if (!key->data) return;
-    connection = (metp_connection_t *) key->data;
+    connection = (s5mp_connection_t *) key->data;
     connection->stm.current = &connection->stm.states[next];
 }
 
-static void metp_handle_close(struct selector_key *key){
-    metp_connection_t * connection = (metp_connection_t *) key->data;
+static void s5mp_handle_close(struct selector_key *key){
+    s5mp_connection_t * connection = (s5mp_connection_t *) key->data;
     if(connection == NULL){
         return;
     }    
@@ -167,20 +167,20 @@ static void metp_handle_close(struct selector_key *key){
     key->data = NULL;
 }
 
-static void metp_handle_block(struct selector_key *key){
-    metp_connection_t * connection = (metp_connection_t *) key->data;
+static void s5mp_handle_block(struct selector_key *key){
+    s5mp_connection_t * connection = (s5mp_connection_t *) key->data;
     if (!connection) return;
 
     unsigned int next = stm_handler_block(&connection->stm, key);
     if (!key->data) return;
-    connection = (metp_connection_t *) key->data;
+    connection = (s5mp_connection_t *) key->data;
     connection->stm.current = &connection->stm.states[next];
 }
 
-static void metp_handle_accept_connection(int server_fd, fd_selector selector){
+static void s5mp_handle_accept_connection(int server_fd, fd_selector selector){
     int client_fd = accept(server_fd, NULL, NULL);
     if(client_fd < 0) {
-        perror("Failed to accept METP connection");
+        perror("Failed to accept S5MP connection");
         return;
     }
     if(fcntl(client_fd, F_SETFL, O_NONBLOCK) < 0) {
@@ -188,9 +188,9 @@ static void metp_handle_accept_connection(int server_fd, fd_selector selector){
         close(client_fd);
         return;
     }
-    metp_connection_t *connection = calloc(1, sizeof(metp_connection_t));
+    s5mp_connection_t *connection = calloc(1, sizeof(s5mp_connection_t));
     if(!connection) {
-        fprintf(stderr, "Failed to initialize METP connection\n");
+        fprintf(stderr, "Failed to initialize S5MP connection\n");
         close(client_fd);
         return;
     }
@@ -212,14 +212,14 @@ static void metp_handle_accept_connection(int server_fd, fd_selector selector){
     buffer_init(connection->buffer_r, BUFFER_MAX, (uint8_t *)malloc(BUFFER_MAX));
     buffer_init(connection->buffer_w, BUFFER_MAX, (uint8_t *)malloc(BUFFER_MAX));
 
-    connection->stm.states = get_metp_state_definition();
-    connection->stm.current = METP_HANDSHAKE;
-    connection->stm.max_state = METP_TERMINATED;
+    connection->stm.states = get_s5mp_state_definition();
+    connection->stm.current = S5MP_HANDSHAKE;
+    connection->stm.max_state = S5MP_TERMINATED;
 
     stm_init(&connection->stm);
 
-    if(selector_register(selector, client_fd, &metp_handler, OP_READ, connection) != SELECTOR_SUCCESS) {
-        fprintf(stderr, "Failed to register METP client\n");
+    if(selector_register(selector, client_fd, &s5mp_handler, OP_READ, connection) != SELECTOR_SUCCESS) {
+        fprintf(stderr, "Failed to register S5MP client\n");
         close(client_fd);
         free(connection->buffer_r);
         free(connection->buffer_w);
@@ -227,8 +227,8 @@ static void metp_handle_accept_connection(int server_fd, fd_selector selector){
         return;
     }
 
-    if(connection->stm.states[METP_HANDSHAKE].on_arrival) {
-        connection->stm.states[METP_HANDSHAKE].on_arrival(METP_HANDSHAKE, &(struct selector_key){.fd = client_fd, .data = connection });
+    if(connection->stm.states[S5MP_HANDSHAKE].on_arrival) {
+        connection->stm.states[S5MP_HANDSHAKE].on_arrival(S5MP_HANDSHAKE, &(struct selector_key){.fd = client_fd, .data = connection });
     }
 }
 
@@ -285,8 +285,8 @@ static int create_listeners(const char *addr, const char *port) {
     return fd;
 }
 
-static void metp_accept_wrapper(struct selector_key *key) {
-    metp_handle_accept_connection(key->fd, key->s);
+static void s5mp_accept_wrapper(struct selector_key *key) {
+    s5mp_handle_accept_connection(key->fd, key->s);
 }
 
 
@@ -350,7 +350,7 @@ static void socks5_handle_accept_connection(struct selector_key *key){
         inet_ntop(AF_INET6, &s->sin6_addr, connection->client_ip, INET6_ADDRSTRLEN);
     }
     connection->bytes_sent = 0;
-    size_t size = get_metp_buffer_size();
+    size_t size = get_s5mp_buffer_size();
     buffer_init(&connection->read_c, size, connection->raw_read_c);
     buffer_init(&connection->write_c, size, connection->raw_write_c);
     buffer_init(&connection->read_p, size, connection->raw_read_p);
@@ -431,29 +431,29 @@ int main(int argc, char **argv) {
 
     int m_fd = create_listeners(args.mng_addr, mng_port_str);
     if (m_fd == -1) {
-        fprintf(stderr, "Failed to create METP listener on %s:%s\n", args.mng_addr, mng_port_str);
+        fprintf(stderr, "Failed to create S5MP listener on %s:%s\n", args.mng_addr, mng_port_str);
         close(s5_fd);
         selector_destroy(sel);
         return 1;
     }
     
     if (fcntl(m_fd, F_SETFL, O_NONBLOCK) == -1) {
-        perror("Failed to set METP listener non-blocking");
+        perror("Failed to set S5MP listener non-blocking");
         close(s5_fd);
         close(m_fd);
         selector_destroy(sel);
         return 1;
     }
     
-    static const struct fd_handler metp_accept_handler = {
-        .handle_read = metp_accept_wrapper,
+    static const struct fd_handler s5mp_accept_handler = {
+        .handle_read = s5mp_accept_wrapper,
         .handle_write = NULL,
         .handle_block = NULL,
         .handle_close = NULL,
     };
     
-    if (selector_register(sel, m_fd, &metp_accept_handler, OP_READ, NULL) != SELECTOR_SUCCESS) {
-        perror("Failed to register METP listener");
+    if (selector_register(sel, m_fd, &s5mp_accept_handler, OP_READ, NULL) != SELECTOR_SUCCESS) {
+        perror("Failed to register S5MP listener");
         close(s5_fd);
         close(m_fd);
         selector_destroy(sel);

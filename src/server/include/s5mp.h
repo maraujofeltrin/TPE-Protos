@@ -1,5 +1,5 @@
-#ifndef METP_H_
-#define METP_H_
+#ifndef S5MP_H_
+#define S5MP_H_
 
 #include "selector.h"
 #include "../../utils/include/stm.h"
@@ -10,22 +10,22 @@
 #define BUFFER_MAX 4096
 
 typedef enum {
-    METP_HANDSHAKE,
-    METP_HANDSHAKE_RESPONSE,
-    METP_AUTH,
-    METP_REQUEST,
-    METP_REQUEST_RESPONSE,
-    METP_ERROR,
-    METP_AUTH_RESPONSE,
-    METP_TERMINATED
-} metp_state_t;
+    S5MP_HANDSHAKE,
+    S5MP_HANDSHAKE_RESPONSE,
+    S5MP_AUTH,
+    S5MP_REQUEST,
+    S5MP_REQUEST_RESPONSE,
+    S5MP_ERROR,
+    S5MP_AUTH_RESPONSE,
+    S5MP_TERMINATED
+} s5mp_state_t;
 
-typedef struct metp_parser{
+typedef struct s5mp_parser{
     char text[BUFFER_MAX];
     size_t cantBytes;
-}metp_parser;
+}s5mp_parser;
 
-typedef struct metp_connection {
+typedef struct s5mp_connection {
     int fd_client;
     bool authenticated;
     bool conected;
@@ -37,8 +37,8 @@ typedef struct metp_connection {
     char cur_user[USER_MAX];
 
     union{
-        metp_parser auth_parser;
-        metp_parser request_parser;
+        s5mp_parser auth_parser;
+        s5mp_parser request_parser;
     }parser;
 
     char * to_send;
@@ -47,9 +47,9 @@ typedef struct metp_connection {
     
     buffer * buffer_r;
     buffer * buffer_w;
-}metp_connection_t;
+}s5mp_connection_t;
 
-const struct state_definition * get_metp_state_definition(void);
-size_t get_metp_buffer_size();
+const struct state_definition * get_s5mp_state_definition(void);
+size_t get_s5mp_buffer_size();
 
 #endif

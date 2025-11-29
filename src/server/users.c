@@ -156,6 +156,25 @@ const char * get_all_logs(void){
 	return buf;
 }
 
+int access_logs(const char * username, const char * ip, const char * dest, size_t cant_bytes){
+	if(!username || !ip || !dest){
+		return -1;
+	}
+	strcpy(logs[pos_logs].username, username);
+	strcpy(logs[pos_logs].ip, ip);
+	strcpy(logs[pos_logs].dest, dest);
+	logs[pos_logs].cant_bytes = cant_bytes;
+	logs[pos_logs].time = time(NULL);
+	
+	int ret = pos_logs;
+	pos_logs = (pos_logs + 1) % MAX_LOGS;
+	if(cant_logs < MAX_LOGS){
+		cant_logs++;	
+	}
+	return ret;	
+
+}
+
 void free_users(void) {
 	for (size_t i = 0; i < users_store_count; ++i) {
 		free(users_store[i].username);
