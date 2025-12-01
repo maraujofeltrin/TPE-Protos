@@ -11,7 +11,7 @@
 typedef struct handshake_request {
     uint8_t version;
     uint8_t nmethods;
-    uint8_t * methods; //VER SI ES ESTATICO 
+    uint8_t methods[255];
 } handshake_request_t;
 
 typedef struct handshake_response {

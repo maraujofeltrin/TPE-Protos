@@ -165,7 +165,7 @@ static unsigned socks5_handshake_on_read(struct selector_key * key) {
 
             uint8_t resp[2] = {handshake->response.version, handshake->response.method};
             for(size_t i = 0; i < 2; i++){
-                buffer_write(&connection->write_c, resp[i]);
+                buffer_write(&connection->write_p, resp[i]);
             }
             selector_set_interest_key(key, OP_WRITE);
             return (handshake->response.method == HANDSHAKE_METHOD_NO_ACCEPTABLE) ? ERROR : HANDSHAKE_RESPONSE;
