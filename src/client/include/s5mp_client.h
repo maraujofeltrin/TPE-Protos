@@ -6,19 +6,16 @@
 #include <time.h>
 #include <sys/types.h>
 
-
 #define BUFFER_MAX 1024
-
-
 
 typedef struct{
     char *username;
     char *password;
     char *role;
-}client_credentials_t;
+}s5mp_credentials_t;
 
 typedef struct user_list{
-    client_credentials_t * users;
+    s5mp_credentials_t * users;
     uint64_t cant_users;
 }user_list_t;
 
@@ -63,8 +60,8 @@ typedef enum{
 void free_log_list(logs_list_t * list);
 void free_user_list(user_list_t * list);
 status_types connect_to_server(const char * ip, uint16_t port, const char * username, const char * password);
-void close_connection();
-command_status_types add_user_client(client_credentials_t new_user);
+void close_connection(void);
+command_status_types add_user_client(s5mp_credentials_t new_user);
 command_status_types set_size_buffer_client(uint64_t size);
 command_status_types remove_user_client(const char * name);
 command_status_types set_role_client(const char *username, const char *role);

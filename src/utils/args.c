@@ -46,8 +46,8 @@ static void
 version(void)
 {
     fprintf(stderr, "socks5v version 0.0\n"
-            "ITBA Protocolos de ComunicaciÃ³n 2025/1 -- Grupo X\n"
-            "AQUI VA LA LICENCIA\n");
+            "ITBA Protocolos de ComunicaciÃ³n 2025/2 -- Grupo 07\n"
+            "\n");
 }
 
 static void

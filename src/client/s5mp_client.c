@@ -4,11 +4,15 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <netdb.h>
 
 int sockfd = -1;
 bool connected = false;
 
-// Funciones auxiliares para enviar y recibir
+static command_status_types parse_response_code(const char *line);
+static ssize_t send_full(int fd, const char *buf, size_t len);
+static ssize_t recv_line(int fd, char *buf, size_t max_len);
+
 static ssize_t send_full(int fd, const char *buf, size_t len) {
     size_t total = 0;
     while (total < len) {
@@ -34,8 +38,6 @@ static ssize_t recv_line(int fd, char *buf, size_t max_len) {
     return i;
 }
 
-static command_status_types parse_response_code(const char *line);
-
 void close_connection(){
     if(connected){
         close(sockfd);
@@ -44,7 +46,7 @@ void close_connection(){
     }
 }
 
-command_status_types add_user_client(client_credentials_t new_user){
+command_status_types add_user_client(s5mp_credentials_t new_user){
     if(!connected){
         return SERVER_ERROR_RESP;
     }
@@ -111,7 +113,7 @@ command_status_types get_all_users(user_list_t * list){
     if(recv_line(sockfd, l, sizeof(l)) <= 0) return SERVER_ERROR_RESP;
     if(strncmp(l, "200", 3) == 0){
         size_t c = 0, cap = 16;
-        list->users = malloc(cap * sizeof(client_credentials_t));
+        list->users = malloc(cap * sizeof(s5mp_credentials_t));
         list->cant_users = 0;
 
         while(recv_line(sockfd, l, sizeof(l)) > 0){
@@ -158,7 +160,6 @@ command_status_types get_logs_client(logs_list_t * list){
                 free(list->logs);
                 return COMMAND_ERROR_RESP;
             }
-            // Asignar memoria para strings y copiar
             list->logs[c].username = malloc(strlen(username) + 1);
             list->logs[c].ip = malloc(strlen(ip) + 1);
             list->logs[c].dest = malloc(strlen(dest) + 1);
@@ -209,6 +210,27 @@ command_status_types get_metrics_client(client_metrics_t * metrics){
     return SUCCESS_RESP;
 }
 
+command_status_types quit_client(){
+    if(!connected){
+        return SERVER_ERROR_RESP;
+    }
+
+    if(send_full(sockfd, "QUIT\n", strlen("QUIT\n")) <= 0){
+        return SERVER_ERROR_RESP;
+    }
+
+    char line[BUFFER_MAX];
+    if(recv_line(sockfd, line, sizeof(line)) <= 0){
+        return SERVER_ERROR_RESP;
+    }
+
+    if(strncmp(line, "200", 3) == 0){
+        close_connection();
+        return SUCCESS_RESP;
+    }
+    return SERVER_ERROR_RESP;
+}
+
 void free_user_list(user_list_t * list){
     if(list->users != NULL){
         free(list->users);
@@ -230,9 +252,74 @@ void free_log_list(logs_list_t * list){
     }
 }
 
+status_types connect_to_server(const char * ip, uint16_t port, const char * username, const char * password){
+    if(connected){
+        return SERVER_ERROR;
+    }
+
+    struct addrinfo hints = {0}, *res, *p;
+    hints.ai_family   = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    char portstr[6];
+    snprintf(portstr, sizeof(portstr), "%u", port);
+
+    int status = getaddrinfo(ip, portstr, &hints, &res);
+    if (status != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(status));
+        return SERVER_ERROR;
+    }
+
+    for (p = res; p; p = p->ai_next) {
+        sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+        if (sockfd < 0) continue;
+        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == 0) {
+            connected = true;
+            break;
+        }
+        close(sockfd);
+    }
+    freeaddrinfo(res);
+    
+    if (!connected) return SERVER_ERROR;
+
+    char buf[BUFFER_MAX];
+    if(send_full(sockfd, "HELLO S5MP/1.0\n", strlen("HELLO S5MP/1.0\n")) <= 0){
+        close_connection();
+        return SERVER_ERROR;
+    }
+    
+    if (recv_line(sockfd, buf, sizeof(buf)) <= 0 || strncmp(buf, "200", 3) != 0){
+        close_connection();
+        return SERVER_ERROR;
+    }
+
+    snprintf(buf, sizeof(buf), "AUTH %s %s\n", username, password);
+    if(send_full(sockfd, buf, strlen(buf)) <= 0){
+        close_connection();
+        return SERVER_ERROR;
+    }
+    
+    if (recv_line(sockfd, buf, sizeof(buf)) <= 0){
+        close_connection();
+        return SERVER_ERROR;
+    }
+    
+    if(strncmp(buf, "200", 3) != 0){
+        close_connection();
+        return AUTHENTICATION_ERROR;
+    }
+
+    return SUCCESS;
+}
+
+
 static command_status_types parse_response_code(const char *line) {
     if(strncmp(line, "200", 3) == 0)      return SUCCESS_RESP;
     if(strncmp(line, "400", 3) == 0)      return COMMAND_ERROR_RESP;
     if(strncmp(line, "403", 3) == 0)      return AUTHENTICATION_ERROR_RESP;
     return SERVER_ERROR_RESP;
 }
+
+
+
