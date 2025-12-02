@@ -47,6 +47,7 @@ int remove_user(const char *username);
  * Returns pointer to user_t if successful, NULL otherwise.
  */
 user_t * authenticate_user(const char *username, const char *password);
+user_t * find_user_by_name(const char * username);
 
 /* Check if a user has permission to execute a command.
  * Returns true if allowed, false otherwise.

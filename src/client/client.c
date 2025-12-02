@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
             break;
         }
         case CMD_ROLE_SETTER:
-            response = set_role_client(args.auth_username, args.role);
+            response = set_role_client(args.target_username, args.role);
             if (response == SUCCESS_RESP) {
                 printf("Role updated successfully.\n");
             } else {
@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
             }
             break;  
         case CMD_DELETE_USER:
-            response = remove_user_client(args.auth_username);
+            response = remove_user_client(args.target_username);
             if (response == SUCCESS_RESP) {
                 printf("User deleted successfully.\n");
             } else {

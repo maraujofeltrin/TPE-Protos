@@ -51,7 +51,7 @@ command_status_types add_user_client(s5mp_credentials_t new_user){
         return SERVER_ERROR_RESP;
     }
     char aux[128];
-    int n = snprintf(aux, sizeof(aux), "ADD-USER %s %s %s\n", new_user.username, new_user.password, new_user.role);
+    int n = snprintf(aux, sizeof(aux), "ADD_USER %s %s\n", new_user.username, new_user.password);
     if(n < 0 || n >= (int)sizeof(aux)) return COMMAND_ERROR_RESP;
     if(send_full(sockfd, aux, strlen(aux)) <= 0) return SERVER_ERROR_RESP;
     char line[BUFFER_MAX];
@@ -64,7 +64,7 @@ command_status_types set_size_buffer_client(uint64_t size){
         return SERVER_ERROR_RESP;
     }
     char aux[64];
-    int n = snprintf(aux, sizeof(aux), "SET-BUFFER-SIZE %lu\n", size);
+    int n = snprintf(aux, sizeof(aux), "BUFFER_NEWSIZE %lu\n", size);
     if(n < 0 || n >= (int)sizeof(aux)) return COMMAND_ERROR_RESP;
     if(send_full(sockfd, aux, strlen(aux)) <= 0) return SERVER_ERROR_RESP;
     char line[BUFFER_MAX];
@@ -77,7 +77,7 @@ command_status_types remove_user_client(const char * name){
         return SERVER_ERROR_RESP;
     }
     char aux[64];
-    int n = snprintf(aux, sizeof(aux), "REMOVE-USER %s\n", name);
+    int n = snprintf(aux, sizeof(aux), "DELETE_USER %s\n", name);
     if(n < 0 || n >= (int)sizeof(aux)) return COMMAND_ERROR_RESP;
     if(send_full(sockfd, aux, strlen(aux)) <= 0) return SERVER_ERROR_RESP;
     char line[BUFFER_MAX];
@@ -90,7 +90,7 @@ command_status_types set_role_client(const char *username, const char *role) {
         return SERVER_ERROR_RESP;
     }
     char buf[128];
-    int n = snprintf(buf, sizeof(buf), "SET-ROLE %s %s\n", username, role);
+    int n = snprintf(buf, sizeof(buf), "ROLE_SETTER %s %s\n", username, role);
     if (n < 0 || n >= (int)sizeof(buf)){ 
         return COMMAND_ERROR_RESP;
     }
@@ -109,23 +109,46 @@ command_status_types get_all_users(user_list_t * list){
         return SERVER_ERROR_RESP;
     }
     char l[BUFFER_MAX];
-    if(send_full(sockfd, "GET-USERS\n", 10) <= 0) return SERVER_ERROR_RESP;
+    if(send_full(sockfd, "USERS\n", strlen("USERS\n")) <= 0) return SERVER_ERROR_RESP;
     if(recv_line(sockfd, l, sizeof(l)) <= 0) return SERVER_ERROR_RESP;
     if(strncmp(l, "200", 3) == 0){
         size_t c = 0, cap = 16;
         list->users = malloc(cap * sizeof(s5mp_credentials_t));
+        if(!list->users) return SERVER_ERROR_RESP;
         list->cant_users = 0;
 
         while(recv_line(sockfd, l, sizeof(l)) > 0){
             if(strcmp(l, ".\n") == 0) break;
-            char username[64], password[64], role[16];
-            if(sscanf(l, "%63s %63s %15s", username, password, role) != 3){
+            
+            // Expandir array si es necesario
+            if(c >= cap) {
+                cap *= 2;
+                s5mp_credentials_t *new_users = realloc(list->users, cap * sizeof(s5mp_credentials_t));
+                if(!new_users) {
+                    free(list->users);
+                    return SERVER_ERROR_RESP;
+                }
+                list->users = new_users;
+            }
+            
+            char username[64], role[16];
+            if(sscanf(l, "%63s %15s", username, role) != 2){
                 free(list->users);
                 return COMMAND_ERROR_RESP;
             }
-            strncpy(list->users[c].username, username, 32);
-            strncpy(list->users[c].password, password, 32);
-            strncpy(list->users[c].role, role, 16);
+            list->users[c].username = strdup(username);
+            list->users[c].password = strdup("");  // No se envía password por seguridad
+            list->users[c].role = strdup(role);
+            if(!list->users[c].username || !list->users[c].password || !list->users[c].role) {
+                // Cleanup en caso de error
+                for(size_t j = 0; j <= c; j++) {
+                    free(list->users[j].username);
+                    free(list->users[j].password);
+                    free(list->users[j].role);
+                }
+                free(list->users);
+                return SERVER_ERROR_RESP;
+            }
             c++;
         }
 
@@ -145,7 +168,7 @@ command_status_types get_logs_client(logs_list_t * list){
         return SERVER_ERROR_RESP;
     }
     char l[BUFFER_MAX];
-    if(send_full(sockfd, "GET-LOGS\n", 9) <= 0) return SERVER_ERROR_RESP;
+    if(send_full(sockfd, "GET_LOGS\n", strlen("GET_LOGS\n")) <= 0) return SERVER_ERROR_RESP;
     if(recv_line(sockfd, l, sizeof(l)) <= 0) return SERVER_ERROR_RESP;
     if(strncmp(l, "200", 3) == 0){
         size_t c = 0, cap = 16;
@@ -154,6 +177,18 @@ command_status_types get_logs_client(logs_list_t * list){
 
         while(recv_line(sockfd, l, sizeof(l)) > 0){
             if(strcmp(l, ".\n") == 0) break;
+            
+            // Expandir array si es necesario
+            if(c >= cap) {
+                cap *= 2;
+                logs_t *new_logs = realloc(list->logs, cap * sizeof(logs_t));
+                if(!new_logs) {
+                    free(list->logs);
+                    return SERVER_ERROR_RESP;
+                }
+                list->logs = new_logs;
+            }
+            
             char username[64], ip[64], dest[128];
             uint64_t bytes;
             if(sscanf(l, "%63s %63s %127s %lu", username, ip, dest, &bytes) != 4){
@@ -163,6 +198,10 @@ command_status_types get_logs_client(logs_list_t * list){
             list->logs[c].username = malloc(strlen(username) + 1);
             list->logs[c].ip = malloc(strlen(ip) + 1);
             list->logs[c].dest = malloc(strlen(dest) + 1);
+            if(!list->logs[c].username || !list->logs[c].ip || !list->logs[c].dest) {
+                free(list->logs);
+                return SERVER_ERROR_RESP;
+            }
             strcpy(list->logs[c].username, username);
             strcpy(list->logs[c].ip, ip);
             strcpy(list->logs[c].dest, dest);
@@ -232,6 +271,11 @@ command_status_types quit_client(){
 
 void free_user_list(user_list_t * list){
     if(list->users != NULL){
+        for(uint64_t i = 0; i < list->cant_users; i++){
+            free(list->users[i].username);
+            free(list->users[i].password);
+            free(list->users[i].role);
+        }
         free(list->users);
         list->users = NULL;
         list->cant_users = 0;

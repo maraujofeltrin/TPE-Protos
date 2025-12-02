@@ -407,7 +407,7 @@ static unsigned s5mp_request_read(struct selector_key * key) {
                         state = S5MP_REQUEST_RESPONSE;
                         continue;
                     }
-                    user_t * user = authenticate_user(user_to_set, "");
+                    user_t * user = find_user_by_name(user_to_set);
                     if(user) {
                         user->role = new_role;
                         response = "200 OK: User role updated successfully\n";

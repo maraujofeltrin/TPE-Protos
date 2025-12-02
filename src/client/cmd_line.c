@@ -110,7 +110,7 @@ void command_parse_args(int argc, char *argv[], client_list_t * config){
         {0, 0, 0, 0}
     };
     
-    const char *option_string = "hvp:u:lmU:a:r:b:d:q";
+    const char *option_string = "hvp:u:lmUa:r:b:d:q";
     
     while((opt = getopt_long(argc, argv, option_string, long_options, NULL)) != -1){
         switch(opt){
@@ -147,25 +147,17 @@ void command_parse_args(int argc, char *argv[], client_list_t * config){
                 break;
                 
             case 'a':
-                if (optind >= argc) {
-                    fprintf(stderr, "Option -a requires username and password\n");
-                    command_help(argv[0]);
-                    exit(EXIT_FAILURE);
-                }
                 if (config->cant_users >= CANT_USERS_MAX) {
                     fprintf(stderr, "Maximum number of users reached\n");
                     exit(EXIT_FAILURE);
                 }
-                strncpy(config->users[config->cant_users].username, optarg, USERNAME_MAX - 1);
-                config->users[config->cant_users].username[USERNAME_MAX - 1] = '\0';
-                strncpy(config->users[config->cant_users].password, argv[optind++], PASSWORD_MAX - 1);
-                config->users[config->cant_users].password[PASSWORD_MAX - 1] = '\0';
+                extract_credentials(optarg, config->users[config->cant_users].username, config->users[config->cant_users].password);
                 config->cant_users++;
                 config->mode = CMD_ADD_USER;
                 break;
                 
             case 'r':
-                parse_role_assignment(optarg, config->auth_username, config->role);
+                parse_role_assignment(optarg, config->target_username, config->role);
                 config->mode = CMD_ROLE_SETTER;
                 break;
                 
@@ -179,8 +171,8 @@ void command_parse_args(int argc, char *argv[], client_list_t * config){
                 break;
                 
             case 'd':
-                strncpy(config->auth_username, optarg, USERNAME_MAX - 1);
-                config->auth_username[USERNAME_MAX - 1] = '\0';
+                strncpy(config->target_username, optarg, USERNAME_MAX - 1);
+                config->target_username[USERNAME_MAX - 1] = '\0';
                 config->mode = CMD_DELETE_USER;
                 break;
                 
