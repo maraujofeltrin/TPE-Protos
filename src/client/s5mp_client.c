@@ -188,22 +188,21 @@ command_status_types get_metrics_client(client_metrics_t * metrics){
     }
     char l[BUFFER_MAX];
     
-    if(send_full(sockfd, "GET-METRICS\n", strlen("GET-METRICS\n")) <= 0) return SERVER_ERROR_RESP;
+    if(send_full(sockfd, "GET_METRICS\n", strlen("GET_METRICS\n")) <= 0) return SERVER_ERROR_RESP;
     
     if(recv_line(sockfd, l, sizeof(l)) <= 0 || strncmp(l, "200", 3) != 0) return SERVER_ERROR_RESP;
     
     while (recv_line(sockfd, l, sizeof(l)) > 0)
     {
         if(strcmp(l, ".\n") == 0) break;
-        char value[64];
-        if(strncmp(l, "total_connections", 17) == 0){
-            metrics->total_connections = strtoull(value + 17, NULL, 10);
+        if(strncmp(l, "total_connections ", 18) == 0){
+            metrics->total_connections = strtoull(l + 18, NULL, 10);
         }
-        else if(strncmp(l, "total_bytes_transferred", 23) == 0){
-            metrics->total_bytes_transferred = strtoull(value + 23, NULL, 10);
+        else if(strncmp(l, "total_bytes_transferred ", 24) == 0){
+            metrics->total_bytes_transferred = strtoull(l + 24, NULL, 10);
         } 
-        else if(strncmp(l, "active_connections", 18) == 0){
-            metrics->active_connections = strtoull(value + 18, NULL, 10);  
+        else if(strncmp(l, "active_connections ", 19) == 0){
+            metrics->active_connections = strtoull(l + 19, NULL, 10);  
         }
     }
 

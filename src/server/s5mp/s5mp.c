@@ -91,7 +91,7 @@ static unsigned s5mp_handshake_read(struct selector_key * key) {
     s5mp_connection_t * connection = key->data;
     size_t cant;    
     unsigned state = S5MP_HANDSHAKE;
-    uint8_t *ptr = buffer_write_ptr(connection->buffer_w, &cant);
+    uint8_t *ptr = buffer_write_ptr(connection->buffer_r, &cant);
     ssize_t n = recv(connection->fd_client, ptr, cant, 0);
 
     if(n <= 0) {
@@ -129,6 +129,7 @@ static unsigned s5mp_handshake_read(struct selector_key * key) {
                 buffer_write_adv(connection->buffer_w, l);
                 selector_set_interest_key(key, OP_WRITE);
                 state = S5MP_HANDSHAKE_RESPONSE;
+                break;  // Salir del loop - no procesar más líneas
             }
             else {
                 resp = "400 Bad Request: Invalid Handshake\n";
@@ -140,6 +141,7 @@ static unsigned s5mp_handshake_read(struct selector_key * key) {
                 memcpy(tor, resp, l);
                 buffer_write_adv(connection->buffer_w, l);
                 state = S5MP_ERROR;
+                break;  // Salir del loop
             }
         }
     }
@@ -194,9 +196,7 @@ static unsigned s5mp_error_write(struct selector_key * key) {
         }
     }
     
-    // En caso de error, siempre limpiamos y cerramos
-    selector_unregister_fd(key->s, connection->fd_client);
-    close(connection->fd_client);
+    // Retornar TERMINATED - el wrapper s5mp_handle_write llamará a close
     return S5MP_TERMINATED;
 }
 
@@ -205,14 +205,19 @@ static unsigned s5mp_read_auth(struct selector_key * key) {
     if(!conn || !conn->buffer_r || !conn->buffer_w) return S5MP_ERROR;
 
     buffer *rb = conn->buffer_r;
-    size_t avail;
-    uint8_t *in = buffer_write_ptr(rb, &avail);
-    ssize_t n = recv(key->fd, in, avail, 0);
-    if (n <= 0) {
-        perror("s5mp recv");
-        return S5MP_ERROR;
+    
+    // Solo hacer recv si no hay datos pendientes en el buffer
+    if(!buffer_can_read(rb)) {
+        size_t avail;
+        uint8_t *in = buffer_write_ptr(rb, &avail);
+        ssize_t n = recv(key->fd, in, avail, 0);
+        if (n <= 0) {
+            perror("s5mp recv");
+            return S5MP_ERROR;
+        }
+        buffer_write_adv(rb, (size_t)n);
     }
-    buffer_write_adv(rb, (size_t)n);
+    
     while (buffer_can_read(rb)) {
         uint8_t c = buffer_read(rb);
         size_t idx = conn->parser.auth_parser.cantBytes;
@@ -497,7 +502,7 @@ static unsigned s5mp_request_read(struct selector_key * key) {
                 } else {
                     char metrics[256];
                     int length = snprintf(metrics, sizeof(metrics),
-                        "Connected Users: %ld\nTotal Connections: %ld\nTotal Data Transfered: %ld\n",
+                        "active_connections %ld\ntotal_connections %ld\ntotal_bytes_transferred %ld\n.\n",
                         metrics_get_active_connections(),
                         metrics_get_total_connections(),
                         metrics_get_total_data_transferred()

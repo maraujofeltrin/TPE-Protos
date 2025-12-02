@@ -146,7 +146,7 @@ static void s5mp_handle_write(struct selector_key *key){
 
     unsigned next =  stm_handler_write(&connection->stm, key);
     if(next == S5MP_TERMINATED){
-        s5mp_handle_close(key);
+        selector_unregister_fd(key->s, key->fd);
         return;
     }
     if (!key->data) return;
@@ -160,11 +160,13 @@ static void s5mp_handle_close(struct selector_key *key){
         return;
     }    
     connection->valid = false;
+    
+    // Solo liberar recursos - selector_unregister_fd ya fue llamado
     close(key->fd);
+    
     free(connection->buffer_r);
     free(connection->buffer_w);
     free(connection); 
-    key->data = NULL;
 }
 
 static void s5mp_handle_block(struct selector_key *key){
@@ -201,16 +203,22 @@ static void s5mp_handle_accept_connection(int server_fd, fd_selector selector){
     connection->close = false;
     connection->valid = true;
     
-    connection->buffer_r = malloc(BUFFER_MAX);
-    connection->buffer_w = malloc(BUFFER_MAX);
-    if(!connection->buffer_r || !connection->buffer_w){
+    connection->buffer_r = malloc(sizeof(buffer));
+    connection->buffer_w = malloc(sizeof(buffer));
+    uint8_t *raw_r = malloc(BUFFER_MAX);
+    uint8_t *raw_w = malloc(BUFFER_MAX);
+    
+    if(!connection->buffer_r || !connection->buffer_w || !raw_r || !raw_w){
         free(connection->buffer_r);
         free(connection->buffer_w);
+        free(raw_r);
+        free(raw_w);
         free(connection);
         return;
     }
-    buffer_init(connection->buffer_r, BUFFER_MAX, (uint8_t *)malloc(BUFFER_MAX));
-    buffer_init(connection->buffer_w, BUFFER_MAX, (uint8_t *)malloc(BUFFER_MAX));
+    
+    buffer_init(connection->buffer_r, BUFFER_MAX, raw_r);
+    buffer_init(connection->buffer_w, BUFFER_MAX, raw_w);
 
     connection->stm.states = get_s5mp_state_definition();
     connection->stm.current = S5MP_HANDSHAKE;
@@ -375,6 +383,9 @@ int main(int argc, char **argv) {
 
     metrics_init();
     users_init();
+
+    // Agregar usuario admin por defecto para testing
+    users_add("admin", "password123", ROLE_ADMIN);
 
     // Agregar usuarios desde línea de comandos
     for (int i = 0; args.users[i].name != NULL && i < MAX_USERS; i++) {
