@@ -45,6 +45,10 @@ static const struct fd_handler socks5_handler = {
     .handle_close = socks5_handle_close,
 };
 
+int register_socks5_target_fd(fd_selector s, int fd, void *data) {
+    return selector_register(s, fd, &socks5_handler, OP_NOOP, data);
+}
+
 static const struct fd_handler s5mp_handler = {
     .handle_read = s5mp_handle_read,
     .handle_write = s5mp_handle_write,
@@ -67,7 +71,6 @@ static void socks5_handle_write(struct selector_key *key){
         return;
     }
     
-    // Solo acceder a connection si no fue liberada
     if (key->data) {
         connection = (socks5_connection_t *) key->data;
         connection->stm.current = &connection->stm.states[next];
@@ -161,7 +164,6 @@ static void s5mp_handle_close(struct selector_key *key){
     }    
     connection->valid = false;
     
-    // Solo liberar recursos - selector_unregister_fd ya fue llamado
     close(key->fd);
     
     free(connection->buffer_r);
@@ -303,8 +305,7 @@ static void socks5_handle_read(struct selector_key *key){
     socks5_connection_t *conn = (socks5_connection_t *) key->data;
     if (!conn) return;
     
-    // Verificar que la conexión esté en estado válido antes de procesar
-    if (conn->client_fd < 0 || key->fd != conn->client_fd) {
+    if (conn->client_fd < 0 || (key->fd != conn->client_fd && key->fd != conn->target_fd)) {
         socks5_handle_close(key);
         return;
     }
@@ -344,6 +345,7 @@ static void socks5_handle_accept_connection(struct selector_key *key){
     }
     connection->client_fd = client_fd;
     connection->tobe_closed = false;
+    connection->relay_active = false;
     connection->target_fd = -1;
     connection->stm.states = (const struct state_definition *)get_socks5_state_definition();
     connection->stm.max_state = REQUEST_RESOLVER;
@@ -384,10 +386,8 @@ int main(int argc, char **argv) {
     metrics_init();
     users_init();
 
-    // Agregar usuario admin por defecto para testing
     users_add("admin", "password123", ROLE_ADMIN);
 
-    // Agregar usuarios desde línea de comandos
     for (int i = 0; args.users[i].name != NULL && i < MAX_USERS; i++) {
         users_add(args.users[i].name, args.users[i].pass, ROLE_USER);
     }

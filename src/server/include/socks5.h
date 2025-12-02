@@ -56,6 +56,7 @@ typedef struct socks5_connection {
     uint8_t auth_status;
     struct addrinfo * req_address;
     struct addrinfo * cur_req_address;
+    bool relay_active;
 } socks5_connection_t;
 
 const struct socks5_state_definition * get_socks5_state_definition();

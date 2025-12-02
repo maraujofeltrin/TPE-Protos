@@ -37,6 +37,7 @@ int parse_socks5_request(socks5_request_parser_t * request, const uint8_t * buf,
                 return -1;
             }
             memcpy(request->dest_address.address.domainname.addr, &buf[offset], request->dest_address.address.domainname.length);
+            request->dest_address.address.domainname.addr[request->dest_address.address.domainname.length] = '\0';  // Null-terminate
             offset += request->dest_address.address.domainname.length;
             request->dest_address.port = (buf[offset] << 8) | buf[offset + 1];
             offset += 2;
@@ -75,7 +76,7 @@ int socks5_response(socks5_response_parser_t * response, uint8_t ** out_buf, siz
             return -1;
     }
 
-    *out_len = 4 + addr_len + 2; // version, response, reserved, atyp, address, port
+    *out_len = 4 + addr_len + 2;
     *out_buf = malloc(*out_len);
     if(*out_buf == NULL) {
         return -1; 

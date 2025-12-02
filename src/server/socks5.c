@@ -9,6 +9,7 @@
 #include <arpa/inet.h>
 
 #include "include/socks5.h"
+#include "include/server.h"
 #include "selector.h"
 #include "include/authentication.h"
 #include "include/users.h"
@@ -30,6 +31,7 @@ static void socks5_request_on_arrival(const unsigned int state, struct selector_
 static unsigned socks5_request_on_read(struct selector_key * key);
 static void socks5_request_response_on_arrival(const unsigned int state, struct selector_key * key);
 static unsigned socks5_request_response_on_read(struct selector_key * key);
+static unsigned socks5_request_response_on_write(struct selector_key * key);
 static unsigned socks5_request_connect_on_write(struct selector_key * key);
 static unsigned socks5_request_bind_on_write(struct selector_key * key);
 static void * dns_resolve_thread(void * arg);
@@ -58,6 +60,7 @@ static const struct state_definition socks5_states_def[] = {
         .state = REQUEST_RESPONSE,
         .on_arrival = socks5_request_response_on_arrival,
         .on_read_ready = socks5_request_response_on_read,
+        .on_write_ready = socks5_request_response_on_write,
     },
     [ERROR] = {
         .state = ERROR,
@@ -160,6 +163,9 @@ static unsigned socks5_handshake_on_read(struct selector_key * key) {
                 if(handshake->request.methods[i] == AUTH_USER){
                     handshake->response.method = AUTH_USER;
                     break;
+                }
+                if(handshake->request.methods[i] == NO_AUTH && handshake->response.method == HANDSHAKE_METHOD_NO_ACCEPTABLE){
+                    handshake->response.method = NO_AUTH;
                 }
             }
 
@@ -314,16 +320,22 @@ static void * dns_resolve_thread(void * arg){
     uint16_t port = connection->parser.request.request.dest_address.port;
     char s[6];
     snprintf(s, sizeof(s), "%u", port);
+    
+    char *hostname = (char*)connection->parser.request.request.dest_address.address.domainname.addr;
+    fprintf(stderr, "[DNS] Resolving hostname: %s port: %s\n", hostname, s);
 
     struct addrinfo hints = {
         .ai_family = AF_UNSPEC,
         .ai_socktype = SOCK_STREAM
     };
 
-    int res = getaddrinfo((char*)connection->parser.request.request.dest_address.address.domainname.addr, s, &hints, &connection->req_address);
+    int res = getaddrinfo(hostname, s, &hints, &connection->req_address);
 
     if(res != 0){
+        fprintf(stderr, "[DNS] Resolution failed: %s\n", gai_strerror(res));
         connection->req_address = NULL;
+    } else {
+        fprintf(stderr, "[DNS] Resolution succeeded\n");
     }
     
     selector_notify_block(key->s, key->fd);
@@ -377,7 +389,13 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                             int connect_result = connect(target_fd_new, (struct sockaddr*)&connection->remote_address, connection->remote_address_len);
                             if(connect_result == 0 || (connect_result == -1 && errno == EINPROGRESS)) {
                                 connection->target_fd = target_fd_new;
-                                selector_set_interest_key(key, OP_WRITE);
+                                if(register_socks5_target_fd(key->s, target_fd_new, connection) != SELECTOR_SUCCESS) {
+                                    close(target_fd_new);
+                                    connection->target_fd = -1;
+                                    return ERROR;
+                                }
+                                selector_set_interest(key->s, target_fd_new, OP_WRITE);
+                                selector_set_interest_key(key, OP_NOOP);
                                 return REQUEST_CONNECT;
                             }
                             close(target_fd_new);
@@ -385,17 +403,20 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                         return ERROR;
 
                     case SOCKS5_ATYP_DOMAINNAME: {
+                        fprintf(stderr, "[DEBUG] Domain name request: %s\n", 
+                                connection->parser.request.request.dest_address.address.domainname.addr);
                         struct selector_key *sk = malloc(sizeof(struct selector_key));
                         if(!sk) return ERROR;
                         *sk = *key;
                         pthread_t dns_thread;
                         if(pthread_create(&dns_thread, NULL, dns_resolve_thread, sk) != 0){
+                            fprintf(stderr, "[DEBUG] Failed to create DNS thread\n");
                             free(sk);
                             return ERROR;
                         }
                         pthread_detach(dns_thread);
                         selector_set_interest_key(key, OP_NOOP);
-                        return REQUEST_CONNECT;
+                        return REQUEST_RESOLVER; 
                     }
 
                     case SOCKS5_ATYP_IPV6:
@@ -416,7 +437,13 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                             int connect_result = connect(target_fd_new, (struct sockaddr*)&connection->remote_address, connection->remote_address_len);
                             if(connect_result == 0 || (connect_result == -1 && errno == EINPROGRESS)) {
                                 connection->target_fd = target_fd_new;
-                                selector_set_interest_key(key, OP_WRITE);
+                                if(register_socks5_target_fd(key->s, target_fd_new, connection) != SELECTOR_SUCCESS) {
+                                    close(target_fd_new);
+                                    connection->target_fd = -1;
+                                    return ERROR;
+                                }
+                                selector_set_interest(key->s, target_fd_new, OP_WRITE);
+                                selector_set_interest_key(key, OP_NOOP);
                                 return REQUEST_CONNECT;
                             }
                             close(target_fd_new);
@@ -441,61 +468,108 @@ static void socks5_request_response_on_arrival(const unsigned int state, struct 
 static unsigned socks5_request_response_on_read(struct selector_key * key){
     socks5_connection_t * connection = key->data;
 
-    if (connection->req_address == NULL) {
-        return ERROR; 
-    }
-    struct addrinfo * resp = connection->req_address;
-    struct addrinfo * cur = resp;
-    
-    while (cur != NULL) {
-        connection->remote_domain = cur->ai_family;
-        connection->remote_address_len = cur->ai_addrlen;
-        memcpy(&connection->remote_address, cur->ai_addr, cur->ai_addrlen);
-
-        int target_fd = socket(connection->remote_domain, SOCK_STREAM, 0);
-        if (target_fd >= 0) {
-            int connect_result = connect(target_fd, (struct sockaddr *)&connection->remote_address, connection->remote_address_len);
-            if (connect_result == 0) {
-                connection->target_fd = target_fd; 
-                return REQUEST_CONNECT;
-            }
-            close(target_fd); 
-        }
-
-        cur = cur->ai_next;
+    if (!connection->relay_active) {
+        return REQUEST_RESPONSE;
     }
 
-    freeaddrinfo(resp);
-    connection->req_address = NULL;
-
-    socks5_response_parser_t reply = {
-        .version = SOCKS5_VERSION,
-        .response = SOCKS5_REP_HOST_UNREACHABLE,
-        .reserved = 0x00
-    };
+    buffer *read_buffer, *write_buffer;
+    int source_fd = key->fd;
+    int dest_fd;
     
-
-    reply.add.atyp = (connection->remote_domain == AF_INET) ? SOCKS5_ATYP_IPV4 : SOCKS5_ATYP_IPV6;
-    if (reply.add.atyp == SOCKS5_ATYP_IPV4) {
-        memset(reply.add.address.ipv4, 0, 4);
+    if (source_fd == connection->client_fd) {
+        read_buffer = &connection->read_c;
+        write_buffer = &connection->write_p;
+        dest_fd = connection->target_fd;
+    } else if (source_fd == connection->target_fd) {
+        read_buffer = &connection->read_p;
+        write_buffer = &connection->write_c;
+        dest_fd = connection->client_fd;
     } else {
-        memset(reply.add.address.ipv6, 0, 16);
-    }
-    reply.add.port = 0;
-
-    uint8_t * r;
-    size_t len;
-    if (socks5_response(&reply, &r, &len) < 0) {
-        fprintf(stderr, "Error al generar la respuesta SOCKS5\n");
         return ERROR;
-    }    
-    for(size_t i = 0; i < len; i++){
-        buffer_write(&connection->write_p, r[i]);
     }
-    free(r);
     
-    selector_set_interest_key(key, OP_WRITE);
-    return CLOSED;
+    size_t space;
+    uint8_t *write_ptr = buffer_write_ptr(read_buffer, &space);
+    ssize_t received = recv(source_fd, write_ptr, space, 0);
+    
+    if (received <= 0) {
+        return CLOSED;
+    }
+    
+    buffer_write_adv(read_buffer, received);
+    connection->bytes_sent += received;
+    
+    size_t available;
+    uint8_t *read_ptr = buffer_read_ptr(read_buffer, &available);
+    for (size_t i = 0; i < available && buffer_can_write(write_buffer); i++) {
+        buffer_write(write_buffer, read_ptr[i]);
+    }
+    buffer_read_adv(read_buffer, available);
+    
+    selector_set_interest(key->s, source_fd, OP_READ);
+    if (buffer_can_read(write_buffer)) {
+        selector_set_interest(key->s, dest_fd, OP_READ | OP_WRITE);
+    }
+    
+    return REQUEST_RESPONSE;
+}
+
+static unsigned socks5_request_response_on_write(struct selector_key * key) {
+    socks5_connection_t * connection = key->data;
+    
+    if (!connection->relay_active) {
+        buffer *b = &connection->write_c;
+        
+        size_t bytes;
+        uint8_t *src = buffer_read_ptr(b, &bytes);
+        ssize_t sent = send(key->fd, src, bytes, MSG_NOSIGNAL);
+        
+        if (sent <= 0) {
+            return CLOSED;
+        }
+        
+        buffer_read_adv(b, sent);
+        
+        if (!buffer_can_read(b)) {
+            connection->relay_active = true;
+            selector_set_interest(key->s, connection->client_fd, OP_READ);
+            selector_set_interest(key->s, connection->target_fd, OP_READ);
+        }
+        
+        return REQUEST_RESPONSE;
+    }
+    
+    buffer *write_buffer;
+    int dest_fd = key->fd;
+    
+    if (dest_fd == connection->client_fd) {
+        write_buffer = &connection->write_c;
+    } else if (dest_fd == connection->target_fd) {
+        write_buffer = &connection->write_p;
+    } else {
+        return ERROR;
+    }
+    
+    size_t bytes;
+    uint8_t *src = buffer_read_ptr(write_buffer, &bytes);
+    
+    if (bytes > 0) {
+        ssize_t sent = send(dest_fd, src, bytes, MSG_NOSIGNAL);
+        
+        if (sent <= 0) {
+            return CLOSED;
+        }
+        
+        buffer_read_adv(write_buffer, sent);
+    }
+    
+    if (!buffer_can_read(write_buffer)) {
+        selector_set_interest(key->s, dest_fd, OP_READ);
+    } else {
+        selector_set_interest(key->s, dest_fd, OP_READ | OP_WRITE);
+    }
+    
+    return REQUEST_RESPONSE;
 }
 
 static int get_bound_address(int fd, socks5_address *addr) {
@@ -556,13 +630,12 @@ static unsigned socks5_request_connect_on_write(struct selector_key * key){
     size_t outlen;
     socks5_response(&reply, &out, &outlen);
     for(size_t i = 0; i < outlen; i++){
-        buffer_write(&connection->write_p, out[i]);
+        buffer_write(&connection->write_c, out[i]);
     }
     free(out);
 
-    connection->stm.current = &connection->stm.states[REQUEST_RESPONSE];
     selector_set_interest(key->s, connection->client_fd, OP_WRITE);
-    selector_set_interest(key->s, connection->target_fd, OP_READ);
+    selector_set_interest(key->s, connection->target_fd, OP_NOOP);
     return REQUEST_RESPONSE;
 }
 
@@ -615,9 +688,17 @@ static unsigned socks5_request_resolver(struct selector_key * key) {
             int connect_result = connect(target_fd, (struct sockaddr *)&connection->remote_address, connection->remote_address_len);
             if (connect_result == 0 || (connect_result == -1 && errno == EINPROGRESS)) {
                 connection->target_fd = target_fd;
+                if(register_socks5_target_fd(key->s, target_fd, connection) != SELECTOR_SUCCESS) {
+                    close(target_fd);
+                    connection->target_fd = -1;
+                    freeaddrinfo(resp);
+                    connection->req_address = NULL;
+                    return ERROR;
+                }
                 freeaddrinfo(resp);
                 connection->req_address = NULL;
-                selector_set_interest_key(key, OP_WRITE);
+                selector_set_interest(key->s, target_fd, OP_WRITE);
+                selector_set_interest_key(key, OP_NOOP);
                 return REQUEST_CONNECT;
             }
             close(target_fd);
