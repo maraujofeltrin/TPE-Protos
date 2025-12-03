@@ -73,6 +73,9 @@ Comandos disponibles (`src/client/cmd_line.c`):
 - `-d <username>`: DELETE_USER — eliminar usuario.
 - `-q`: QUIT — salir.
 
+Nota:
+- El servidor solo acepta tamaños de buffer entre 1 y 4096.
+
 Ejemplos:
 ```bash
 # Obtener métricas

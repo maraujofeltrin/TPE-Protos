@@ -9,12 +9,11 @@
 #include <arpa/inet.h>
 
 #include "include/socks5.h"
-#include "include/server.h"
 #include "selector.h"
 #include "include/authentication.h"
 #include "include/users.h"
 #include "include/builder.h"
-
+#include "include/metrics.h"
 
 // Declaraciones de funciones static
 static void socks5_handshake_on_arrival(const unsigned int state, struct selector_key * key);
@@ -498,6 +497,7 @@ static unsigned socks5_request_response_on_read(struct selector_key * key){
     
     buffer_write_adv(read_buffer, received);
     connection->bytes_sent += received;
+    metrics_data_transferred(received);
     
     size_t available;
     uint8_t *read_ptr = buffer_read_ptr(read_buffer, &available);

@@ -111,6 +111,7 @@ static void socks5_handle_close(struct selector_key *key){
         connection->client_fd = -1;
     }
 
+    metrics_connection_closed();
     free(connection);
     key->data = NULL;  
 }
@@ -484,101 +485,3 @@ int main(int argc, char **argv) {
     free_users();
     return 0;
 }
-
-
-/*----------------------------------------------------------------------*/
-/*----------------------------------------------------------------------*/
-/*----------------------------------------------------------------------*/
-
-/*
-
-#define ECHO_BUF_SIZE 8192
-
-struct echo_connection {
-    int fd;
-    buffer in;
-    buffer out;
-    uint8_t *in_data;
-    uint8_t *out_data;
-};
-
-static void client_handle_close(struct selector_key *key);
-static void client_handle_read(struct selector_key *key);
-static void client_handle_write(struct selector_key *key);
-static void listener_handle_read(struct selector_key *key);
-
-static const struct fd_handler client_handler = {
-    .handle_read = client_handle_read,
-    .handle_write = client_handle_write,
-    .handle_block = NULL,
-    .handle_close = client_handle_close,
-};
-
-static const struct fd_handler listener_handler = {
-    .handle_read = listener_handle_read,
-    .handle_write = NULL,
-    .handle_block = NULL,
-    .handle_close = NULL,
-};
-
-static int set_nonblocking(int fd) {
-    return selector_fd_set_nio(fd);
-}
-
-int main(int argc, char **argv) {
-    (void)argc; (void)argv;
-
-    struct selector_init sconf = {
-        .signal = SIGUSR1,
-        .select_timeout = { .tv_sec = 5, .tv_nsec = 0 }
-    };
-
-    if(selector_init(&sconf) != SELECTOR_SUCCESS) {
-        fprintf(stderr, "selector_init failed\n");
-        return EXIT_FAILURE;
-    }
-
-    fd_selector sel = selector_new(32);
-    if(!sel) {
-        fprintf(stderr, "selector_new failed\n");
-        return EXIT_FAILURE;
-    }
-
-    int port = 1080;
-    int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if(listen_fd < 0) { perror("socket"); return EXIT_FAILURE; }
-    int on = 1;
-    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
-
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(port);
-
-    if(bind(listen_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) { perror("bind"); close(listen_fd); return EXIT_FAILURE; }
-    if(listen(listen_fd, 128) < 0) { perror("listen"); close(listen_fd); return EXIT_FAILURE; }
-    if(set_nonblocking(listen_fd) < 0) { perror("set_nonblocking"); close(listen_fd); return EXIT_FAILURE; }
-
-    if(selector_register(sel, listen_fd, &listener_handler, OP_READ, NULL) != SELECTOR_SUCCESS) {
-        fprintf(stderr, "failed to register listener\n");
-        close(listen_fd);
-        selector_destroy(sel);
-        return EXIT_FAILURE;
-    }
-
-    fprintf(stderr, "echoserver listening on port %d\n", port);
-
-    while(1) {
-        selector_status st = selector_select(sel);
-        if(st != SELECTOR_SUCCESS) {
-            if(st == SELECTOR_IO) {
-                perror("selector_select");
-            }
-        }
-    }
-
-    selector_destroy(sel);
-    close(listen_fd);
-    return EXIT_SUCCESS;
-}*/

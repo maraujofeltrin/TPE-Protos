@@ -397,9 +397,9 @@ static unsigned s5mp_request_read(struct selector_key * key) {
                     state = S5MP_REQUEST_RESPONSE;
                 } else {
                     user_role_t new_role;
-                    if(strcmp(role_str, "ADMIN") == 0) {
+                    if(strcmp(role_str, "admin") == 0) {
                         new_role = ROLE_ADMIN;
-                    } else if(strcmp(role_str, "USER") == 0) {
+                    } else if(strcmp(role_str, "user") == 0) {
                         new_role = ROLE_USER;
                     } else {
                         response = "400 Bad Request: Invalid role specified\n";
