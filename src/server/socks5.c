@@ -402,14 +402,11 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                         return ERROR;
 
                     case SOCKS5_ATYP_DOMAINNAME: {
-                        fprintf(stderr, "[DEBUG] Domain name request: %s\n", 
-                                connection->parser.request.request.dest_address.address.domainname.addr);
                         struct selector_key *sk = malloc(sizeof(struct selector_key));
                         if(!sk) return ERROR;
                         *sk = *key;
                         pthread_t dns_thread;
                         if(pthread_create(&dns_thread, NULL, dns_resolve_thread, sk) != 0){
-                            fprintf(stderr, "[DEBUG] Failed to create DNS thread\n");
                             free(sk);
                             return ERROR;
                         }

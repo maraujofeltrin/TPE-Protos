@@ -11,7 +11,7 @@ Proyecto que implementa:
 ## Compilación
 
 ```bash
-make            # compila todo: server y client
+make            # compila todo: server, client, utils y tests
 make server     # compila solo el servidor
 make client     # compila solo el cliente
 make clean      # limpia binarios y objetos
@@ -43,11 +43,16 @@ Ejemplos:
 ./build/bin/socks5d -p 1080 -P 9090 -u alice:alicepwd -u bob:bobpwd
 ```
 
+Usuario administrador por defecto:
+- Al iniciar el servidor se crea automáticamente un usuario admin:
+	- usuario: `admin`
+	- contraseña: `password123`
+	- rol: `admin`
+
 ## Uso como proxy con `curl`
 
-Preferir `socks5h` para que el DNS lo resuelva el servidor (hostname por proxy):
+Una vez que el servidor esté en ejecución, podés verificar que funcione haciendo una solicitud a través del proxy:
 ```bash
-# Sin autenticación
 curl --proxy socks5h://127.0.0.1:1080 https://example.com
 ```
 
@@ -59,19 +64,28 @@ Autenticación al servicio de management (por defecto usuario administrador prec
 ./build/bin/socks5_client -u admin:password123 [opciones]
 ```
 
-Comandos disponibles (`src/client/cmd_line.c`):
-- `-h`: ayuda y salir.
-- `-v`: versión y salir.
-- `-p <port>`: puerto del servicio de management (por defecto `8080`).
-- `-u <user>:<pass>`: credenciales de management.
-- `-l`: GET_LOGS — obtener logs.
-- `-m`: GET_METRICS — obtener métricas.
-- `-U`: USERS — listar usuarios.
-- `-a <username>:<password>`: ADD_USER — agregar usuario (rol `user`).
-- `-r <username>:<role>`: ROLE_SETTER — setear rol (`admin` | `user`).
-- `-b <buffer_size>`: BUFFER_NEWSIZE — setear tamaño de buffer (bytes).
-- `-d <username>`: DELETE_USER — eliminar usuario.
-- `-q`: QUIT — salir.
+### Comandos disponibles (cliente de administración)
+
+El cliente CLI ubicado en `src/client/cmd_line.c` permite interactuar con el servicio de management del servidor SOCKS5.
+
+Los únicos comandos que pueden ejecutar usuarios con rol **user** (y también **admin**) son: `-h`, `-v`, `-m`.  
+Todos los demás requieren rol **admin**.
+
+| Opción | Descripción | Permisos |
+|--------|-------------|----------|
+| `-h` | Muestra la ayuda y finaliza. | user / admin |
+| `-v` | Muestra la versión y finaliza. | user / admin |
+| `-m` | Obtiene métricas del servidor. | user / admin |
+| `-u <user>:<pass>` | Establece credenciales para la sesión de administración. | admin |
+| `-p <port>` | Puerto del servicio de management (por defecto: `8080`). | admin |
+| `-l` | Obtiene los logs del servidor. | admin |
+| `-U` | Lista los usuarios registrados. | admin |
+| `-a <username>:<password>` | Agrega un usuario con rol `user`. | admin |
+| `-r <username>:<role>` | Modifica el rol de un usuario. | admin |
+| `-b <buffer_size>` | Cambia el tamaño del buffer del servidor. | admin |
+| `-d <username>` | Elimina un usuario. | admin |
+| `-q` | Finaliza la ejecución del cliente. | admin |
+
 
 Nota:
 - El servidor solo acepta tamaños de buffer entre 1 y 4096.
@@ -91,7 +105,7 @@ Ejemplos:
 ./build/bin/socks5_client -u admin:password123 -r user123:admin
 
 # Cambiar tamaño de buffer
-./build/bin/socks5_client -u admin:password123 -b 65536
+./build/bin/socks5_client -u admin:password123 -b 256
 
 # Eliminar usuario
 ./build/bin/socks5_client -u admin:password123 -d user123

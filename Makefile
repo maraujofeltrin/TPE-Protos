@@ -41,7 +41,7 @@ CLIENT_TARGET = $(BIN_DIR)/socks5_client
 
 # Target por defecto
 .PHONY: all
-all: $(UTILS_LIB) tests
+all: utils server client tests
 
 # Paths de include
 INCLUDE_PATHS = -I$(UTILS_INCLUDE_DIR)
