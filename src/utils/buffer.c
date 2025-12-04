@@ -61,7 +61,6 @@ buffer_read_adv(buffer *b, const ssize_t bytes) {
         assert(b->read <= b->write);
 
         if(b->read == b->write) {
-            // compactacion poco costosa
             buffer_compact(b);
         }
     }
@@ -90,7 +89,6 @@ buffer_write(buffer *b, uint8_t c) {
 void
 buffer_compact(buffer *b) {
     if(b->data == b->read) {
-        // nada por hacer
     } else if(b->read == b->write) {
         b->read  = b->data;
         b->write = b->data;

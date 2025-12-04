@@ -93,7 +93,6 @@ parser_utils_strcmpi(const char *s) {
         return def;
     }
 
-    // estados fijos
     const size_t st_eq  = n;
     const size_t st_neq = n + 1;
 
@@ -112,13 +111,11 @@ parser_utils_strcmpi(const char *s) {
         states     [i]              = transitions + (i * 3 + 0);
         nstates    [i]              = 3;
     }
-    // EQ
     transitions[(n + 0) * 3].when   = ANY;
     transitions[(n + 0) * 3].dest   = st_neq;
     transitions[(n + 0) * 3].act1   = neq;
     states     [(n + 0)]            = transitions + ((n + 0) * 3 + 0);
     nstates    [(n + 0)]            = 1;
-    // NEQ
     transitions[(n + 1) * 3].when   = ANY;
     transitions[(n + 1) * 3].dest   = st_neq;
     transitions[(n + 1) * 3].act1   = neq;

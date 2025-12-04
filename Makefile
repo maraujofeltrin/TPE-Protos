@@ -1,7 +1,7 @@
 # Compilador y flags
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -pedantic -g -O0 -D_POSIX_C_SOURCE=200809L
-LDFLAGS = 
+CFLAGS = -Wall -Wextra -std=c99 -pedantic -g -O0 -D_POSIX_C_SOURCE=200809L -fsanitize=address -fsanitize=leak
+LDFLAGS = -fsanitize=address -fsanitize=leak
 TEST_LIBS = -lcheck -lm -lrt -lpthread -lsubunit
 
 # Directorios
@@ -41,7 +41,7 @@ CLIENT_TARGET = $(BIN_DIR)/socks5_client
 
 # Target por defecto
 .PHONY: all
-all: $(UTILS_LIB) tests
+all: utils server client tests
 
 # Paths de include
 INCLUDE_PATHS = -I$(UTILS_INCLUDE_DIR)
