@@ -29,7 +29,6 @@ Parámetros principales (desde `src/utils/args.c`):
 - `-L <conf addr>`: dirección del servicio de management (por defecto `127.0.0.1`).
 - `-P <conf port>`: puerto de management (por defecto `8080`).
 - `-u <name>:<pass>`: agrega usuario habilitado para usar el proxy (hasta 10).
-- `-N`: deshabilita disectors.
 
 Ejemplos:
 ```bash
@@ -53,7 +52,9 @@ Usuario administrador por defecto:
 
 Una vez que el servidor esté en ejecución, podés verificar que funcione haciendo una solicitud a través del proxy:
 ```bash
-curl --proxy socks5h://127.0.0.1:1080 https://example.com
+curl --proxy socks5h://127.0.0.1:1080 https://www.google.com
+curl -v --socks5 127.0.0.1:1080 http://www.google.com
+
 ```
 
 ## Ejecución — Cliente de Management (`socks5_client`)
