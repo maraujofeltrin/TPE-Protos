@@ -387,7 +387,7 @@ int main(int argc, char **argv) {
     metrics_init();
     users_init();
 
-    users_add("admin", "password123", ROLE_ADMIN);
+    users_add("admin", "pass123", ROLE_ADMIN);
 
     for (int i = 0; args.users[i].name != NULL && i < MAX_USERS; i++) {
         users_add(args.users[i].name, args.users[i].pass, ROLE_USER);

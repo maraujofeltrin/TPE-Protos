@@ -46,7 +46,7 @@ Ejemplos:
 Usuario administrador por defecto:
 - Al iniciar el servidor se crea automáticamente un usuario admin:
 	- usuario: `admin`
-	- contraseña: `password123`
+	- contraseña: `pass123`
 	- rol: `admin`
 
 ## Uso como proxy con `curl`
@@ -58,10 +58,10 @@ curl --proxy socks5h://127.0.0.1:1080 https://example.com
 
 ## Ejecución — Cliente de Management (`socks5_client`)
 
-Autenticación al servicio de management (por defecto usuario administrador precargado `admin:password123`):
+Autenticación al servicio de management (por defecto usuario administrador precargado `admin:pass123`):
 
 ```bash
-./build/bin/socks5_client -u admin:password123 [opciones]
+./build/bin/socks5_client -u admin:pass123 [opciones]
 ```
 
 ### Comandos disponibles (cliente de administración)
@@ -93,26 +93,26 @@ Nota:
 Ejemplos:
 ```bash
 # Obtener métricas
-./build/bin/socks5_client -u admin:password123 -m
+./build/bin/socks5_client -u admin:pass123 -m
 
 # Listar usuarios
-./build/bin/socks5_client -u admin:password123 -U
+./build/bin/socks5_client -u admin:pass123 -U
 
 # Agregar usuario
-./build/bin/socks5_client -u admin:password123 -a user123:pass123
+./build/bin/socks5_client -u admin:pass123 -a user123:pass123
 
 # Cambiar rol
-./build/bin/socks5_client -u admin:password123 -r user123:admin
+./build/bin/socks5_client -u admin:pass123 -r user123:admin
 
 # Cambiar tamaño de buffer
-./build/bin/socks5_client -u admin:password123 -b 256
+./build/bin/socks5_client -u admin:pass123 -b 256
 
 # Eliminar usuario
-./build/bin/socks5_client -u admin:password123 -d user123
+./build/bin/socks5_client -u admin:pass123 -d user123
 ```
 
 ## Notas de métricas y bytes transferidos
-- Para comparaciones, usar deltas de `GET_METRICS` antes y después de una única petición.
+- Para comparaciones, usar deltas de `-m` antes y después de una única petición.
 
 ## Estructura del proyecto
 - Código fuente: `src/`
