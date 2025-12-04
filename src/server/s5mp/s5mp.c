@@ -64,7 +64,6 @@ static const struct state_definition s5mp_states_def[] = {
     }
 };
 
-// Función auxiliar para escribir mensajes en el buffer de salida
 static void write_message_to_buffer(buffer * b, const char *message) {
     if (!b || !message) return;
     
@@ -129,7 +128,7 @@ static unsigned s5mp_handshake_read(struct selector_key * key) {
                 buffer_write_adv(connection->buffer_w, l);
                 selector_set_interest_key(key, OP_WRITE);
                 state = S5MP_HANDSHAKE_RESPONSE;
-                break;  // Salir del loop - no procesar más líneas
+                break;
             }
             else {
                 resp = "400 Bad Request: Invalid Handshake\n";
@@ -141,7 +140,7 @@ static unsigned s5mp_handshake_read(struct selector_key * key) {
                 memcpy(tor, resp, l);
                 buffer_write_adv(connection->buffer_w, l);
                 state = S5MP_ERROR;
-                break;  // Salir del loop
+                break;
             }
         }
     }
@@ -196,7 +195,6 @@ static unsigned s5mp_error_write(struct selector_key * key) {
         }
     }
     
-    // Retornar TERMINATED - el wrapper s5mp_handle_write llamará a close
     return S5MP_TERMINATED;
 }
 
@@ -206,7 +204,6 @@ static unsigned s5mp_read_auth(struct selector_key * key) {
 
     buffer *rb = conn->buffer_r;
     
-    // Solo hacer recv si no hay datos pendientes en el buffer
     if(!buffer_can_read(rb)) {
         size_t avail;
         uint8_t *in = buffer_write_ptr(rb, &avail);
@@ -509,7 +506,7 @@ static unsigned s5mp_request_read(struct selector_key * key) {
                     );
                     if (length > 0 && (size_t)length < sizeof(metrics)) {
                         s5mp_200(key);
-                        size_t amount;//VER LO DE ADENTRO DEL IF
+                        size_t amount;
                         uint8_t * tor = buffer_write_ptr(conn->buffer_w, &amount);
                         size_t l = (size_t)length;
                         if(l > amount) {
@@ -588,7 +585,6 @@ static unsigned s5mp_request_response_write(struct selector_key * key) {
         }
     }
     
-    // Si terminamos de enviar todo
     if (!buffer_can_read(connection->buffer_w)) {
         if (connection->close) {
             close(connection->fd_client);

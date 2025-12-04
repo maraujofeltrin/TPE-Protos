@@ -37,7 +37,7 @@ int parse_socks5_request(socks5_request_parser_t * request, const uint8_t * buf,
                 return -1;
             }
             memcpy(request->dest_address.address.domainname.addr, &buf[offset], request->dest_address.address.domainname.length);
-            request->dest_address.address.domainname.addr[request->dest_address.address.domainname.length] = '\0';  // Null-terminate
+            request->dest_address.address.domainname.addr[request->dest_address.address.domainname.length] = '\0';
             offset += request->dest_address.address.domainname.length;
             request->dest_address.port = (buf[offset] << 8) | buf[offset + 1];
             offset += 2;

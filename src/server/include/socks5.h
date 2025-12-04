@@ -16,7 +16,6 @@
 #define SOCKS5_VERSION 0x05
 #define BUFFER_MAX 4096
 
-//VER SI FALTAN MAS
 typedef enum {
     HANDSHAKE,
     HANDSHAKE_RESPONSE,

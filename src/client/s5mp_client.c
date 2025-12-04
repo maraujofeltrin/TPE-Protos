@@ -120,7 +120,6 @@ command_status_types get_all_users(user_list_t * list){
         while(recv_line(sockfd, l, sizeof(l)) > 0){
             if(strcmp(l, ".\n") == 0) break;
             
-            // Expandir array si es necesario
             if(c >= cap) {
                 cap *= 2;
                 s5mp_credentials_t *new_users = realloc(list->users, cap * sizeof(s5mp_credentials_t));
@@ -137,10 +136,9 @@ command_status_types get_all_users(user_list_t * list){
                 return COMMAND_ERROR_RESP;
             }
             list->users[c].username = strdup(username);
-            list->users[c].password = strdup("");  // No se envía password por seguridad
+            list->users[c].password = strdup("");
             list->users[c].role = strdup(role);
             if(!list->users[c].username || !list->users[c].password || !list->users[c].role) {
-                // Cleanup en caso de error
                 for(size_t j = 0; j <= c; j++) {
                     free(list->users[j].username);
                     free(list->users[j].password);
@@ -178,7 +176,6 @@ command_status_types get_logs_client(logs_list_t * list){
         while(recv_line(sockfd, l, sizeof(l)) > 0){
             if(strcmp(l, ".\n") == 0) break;
             
-            // Expandir array si es necesario
             if(c >= cap) {
                 cap *= 2;
                 logs_t *new_logs = realloc(list->logs, cap * sizeof(logs_t));

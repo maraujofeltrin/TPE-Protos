@@ -37,9 +37,9 @@ typedef struct{
     enum cmd_modes mode;
     char role[ROLE_MAX];
     unsigned long long buffer_size;
-    char target_username[USERNAME_MAX];  // For operations targeting another user (like ROLE_SETTER, DELETE_USER)
+    char target_username[USERNAME_MAX];
 } client_list_t;
 
 void command_parse_args(int argc, char *argv[], client_list_t * config);
 
-#endif // CMD_LINE_H
+#endif

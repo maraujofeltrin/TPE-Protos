@@ -133,7 +133,6 @@ const char * get_user_list() {
 			break;
 		pos += written;
 	}
-	// Agregar terminador
 	if (pos < (int)sizeof(list) - 3) {
 		list[pos++] = '.';
 		list[pos++] = '\n';
@@ -150,7 +149,6 @@ const char * get_all_logs(void){
 	for(int i = 0; i < cant_logs; i++){
 		int j = (pos_logs - cant_logs + i) % MAX_LOGS;
 
-		// Formato: username ip dest bytes
 		int w = snprintf(buf + p, sizeof(buf) - p, "%s %s %s %lu\n",
 			logs[j].username,
 			logs[j].ip,
@@ -164,7 +162,6 @@ const char * get_all_logs(void){
 		p += w;
 	}
 	
-	// Agregar terminador
 	if (p < (int)sizeof(buf) - 3) {
 		buf[p++] = '.';
 		buf[p++] = '\n';

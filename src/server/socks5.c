@@ -15,7 +15,6 @@
 #include "include/builder.h"
 #include "include/metrics.h"
 
-// Declaraciones de funciones static
 static void socks5_handshake_on_arrival(const unsigned int state, struct selector_key * key);
 static unsigned socks5_handshake_on_read(struct selector_key * key);
 static unsigned socks5_handshake_response_on_write(struct selector_key * key);
@@ -39,7 +38,6 @@ static void socks5_request_resolver_on_arrival(const unsigned state, struct sele
 static unsigned socks5_request_resolver(struct selector_key * key);
 
 
-//VER SI FALTAN MAS
 static const struct state_definition socks5_states_def[] = {
     [HANDSHAKE] = {
         .state = HANDSHAKE,
@@ -382,7 +380,6 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                         char ip4_str[INET_ADDRSTRLEN];
                         inet_ntop(AF_INET, connection->parser.request.request.dest_address.address.ipv4, ip4_str, INET_ADDRSTRLEN);
                         
-                        //VER IMPELEMENTACION
                         int target_fd_new = socket(connection->remote_domain, SOCK_STREAM | SOCK_NONBLOCK, 0);
                         if(target_fd_new >= 0) {
                             int connect_result = connect(target_fd_new, (struct sockaddr*)&connection->remote_address, connection->remote_address_len);
@@ -427,7 +424,6 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                         char ip6_str[INET6_ADDRSTRLEN];
                         inet_ntop(AF_INET6, connection->parser.request.request.dest_address.address.ipv6, ip6_str, INET6_ADDRSTRLEN);
                         
-                        //VER IMPELEMENTACION
                         target_fd_new = socket(connection->remote_domain, SOCK_STREAM | SOCK_NONBLOCK, 0);
                         if(target_fd_new >= 0) {
                             int connect_result = connect(target_fd_new, (struct sockaddr*)&connection->remote_address, connection->remote_address_len);
