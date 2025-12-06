@@ -14,6 +14,7 @@
 #include "include/users.h"
 #include "include/builder.h"
 #include "include/metrics.h"
+#include "include/server.h"
 
 static void socks5_handshake_on_arrival(const unsigned int state, struct selector_key * key);
 static unsigned socks5_handshake_on_read(struct selector_key * key);
@@ -26,6 +27,7 @@ static unsigned socks5_error_on_write();
 static unsigned socks5_closed_on_read();
 static unsigned socks5_closed_on_write();
 static void socks5_request_on_arrival(const unsigned int state, struct selector_key * key);
+static void send_socks5_error_response(socks5_connection_t *connection, socks5_response_type error_code);
 static unsigned socks5_request_on_read(struct selector_key * key);
 static void socks5_request_response_on_arrival(const unsigned int state, struct selector_key * key);
 static unsigned socks5_request_response_on_read(struct selector_key * key);
@@ -305,12 +307,32 @@ static unsigned socks5_closed_on_write(){
     return CLOSED;
 }
 
-static void socks5_request_on_arrival(const unsigned int state, struct selector_key * key){
-    (void)state; 
-    selector_set_interest_key(key, OP_READ);
+static void send_socks5_error_response(socks5_connection_t *connection, socks5_response_type error_code) {
+    socks5_response_parser_t reply = {
+        .version = SOCKS5_VERSION,
+        .response = error_code,
+        .reserved = 0x00,
+        .add = {
+            .atyp = SOCKS5_ATYP_IPV4,
+            .port = 0
+        }
+    };
+    memset(reply.add.address.ipv4, 0, 4);
+
+    uint8_t *r;
+    size_t len;
+    if (socks5_response(&reply, &r, &len) >= 0) {
+        for(size_t i = 0; i < len; i++){
+            buffer_write(&connection->write_p, r[i]);
+        }
+        free(r);
+    }
 }
 
-static void * dns_resolve_thread(void * arg){
+static void socks5_request_on_arrival(const unsigned int state, struct selector_key * key){
+    (void)state;
+    selector_set_interest_key(key, OP_READ);
+}static void * dns_resolve_thread(void * arg){
     struct selector_key * key = (struct selector_key *)arg;
     socks5_connection_t * connection = key->data;
 
@@ -388,7 +410,9 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                                 if(register_socks5_target_fd(key->s, target_fd_new, connection) != SELECTOR_SUCCESS) {
                                     close(target_fd_new);
                                     connection->target_fd = -1;
-                                    return ERROR;
+                                    send_socks5_error_response(connection, SOCKS5_REP_GENERAL_FAILURE);
+                                    selector_set_interest_key(key, OP_WRITE);
+                                    return CLOSED;
                                 }
                                 selector_set_interest(key->s, target_fd_new, OP_WRITE);
                                 selector_set_interest_key(key, OP_NOOP);
@@ -396,7 +420,9 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                             }
                             close(target_fd_new);
                         }
-                        return ERROR;
+                        send_socks5_error_response(connection, target_fd_new < 0 ? SOCKS5_REP_GENERAL_FAILURE : SOCKS5_REP_CONNECTION_REFUSED);
+                        selector_set_interest_key(key, OP_WRITE);
+                        return CLOSED;
 
                     case SOCKS5_ATYP_DOMAINNAME: {
                         struct selector_key *sk = malloc(sizeof(struct selector_key));
@@ -405,7 +431,9 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                         pthread_t dns_thread;
                         if(pthread_create(&dns_thread, NULL, dns_resolve_thread, sk) != 0){
                             free(sk);
-                            return ERROR;
+                            send_socks5_error_response(connection, SOCKS5_REP_GENERAL_FAILURE);
+                            selector_set_interest_key(key, OP_WRITE);
+                            return CLOSED;
                         }
                         pthread_detach(dns_thread);
                         selector_set_interest_key(key, OP_NOOP);
@@ -432,7 +460,9 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                                 if(register_socks5_target_fd(key->s, target_fd_new, connection) != SELECTOR_SUCCESS) {
                                     close(target_fd_new);
                                     connection->target_fd = -1;
-                                    return ERROR;
+                                    send_socks5_error_response(connection, SOCKS5_REP_GENERAL_FAILURE);
+                                    selector_set_interest_key(key, OP_WRITE);
+                                    return CLOSED;
                                 }
                                 selector_set_interest(key->s, target_fd_new, OP_WRITE);
                                 selector_set_interest_key(key, OP_NOOP);
@@ -440,13 +470,22 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                             }
                             close(target_fd_new);
                         }
-                        return ERROR;
+                        send_socks5_error_response(connection, target_fd_new < 0 ? SOCKS5_REP_GENERAL_FAILURE : SOCKS5_REP_CONNECTION_REFUSED);
+                        selector_set_interest_key(key, OP_WRITE);
+                        return CLOSED;
                 }
+                break;
             case SOCKS5_COM_BIND:
                 selector_set_interest_key(key, OP_WRITE);
                 return REQUEST_BIND;
+            case SOCKS5_COM_UDP_ASSOCIATE:
+                send_socks5_error_response(connection, SOCKS5_REP_COMMAND_NOT_SUPPORTED);
+                selector_set_interest_key(key, OP_WRITE);
+                return CLOSED;
             default:
-                return ERROR;
+                send_socks5_error_response(connection, SOCKS5_REP_COMMAND_NOT_SUPPORTED);
+                selector_set_interest_key(key, OP_WRITE);
+                return CLOSED;
         }
     }
     return REQUEST;
@@ -499,10 +538,29 @@ static unsigned socks5_request_response_on_read(struct selector_key * key){
     }
     buffer_read_adv(read_buffer, available);
     
-    selector_set_interest(key->s, source_fd, OP_READ);
-    if (buffer_can_read(write_buffer)) {
-        selector_set_interest(key->s, dest_fd, OP_READ | OP_WRITE);
+    // Intentar escribir inmediatamente (busy write)
+    size_t bytes_to_write;
+    uint8_t *write_src = buffer_read_ptr(write_buffer, &bytes_to_write);
+    if (bytes_to_write > 0) {
+        ssize_t sent = send(dest_fd, write_src, bytes_to_write, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (sent > 0) {
+            buffer_read_adv(write_buffer, sent);
+        }
     }
+    
+    // Configurar intereses según el estado de los buffers
+    fd_interest source_interest = OP_READ;
+    if (!buffer_can_write(read_buffer)) {
+        source_interest = OP_NOOP;  // Buffer lleno, pausar lectura
+    }
+    
+    fd_interest dest_interest = OP_READ;
+    if (buffer_can_read(write_buffer)) {
+        dest_interest = OP_READ | OP_WRITE;  // Hay datos pendientes por escribir
+    }
+    
+    selector_set_interest(key->s, source_fd, source_interest);
+    selector_set_interest(key->s, dest_fd, dest_interest);
     
     return REQUEST_RESPONSE;
 }
@@ -556,11 +614,23 @@ static unsigned socks5_request_response_on_write(struct selector_key * key) {
         buffer_read_adv(write_buffer, sent);
     }
     
-    if (!buffer_can_read(write_buffer)) {
-        selector_set_interest(key->s, dest_fd, OP_READ);
-    } else {
-        selector_set_interest(key->s, dest_fd, OP_READ | OP_WRITE);
+    // Determinar el origen de los datos
+    int source_fd = (dest_fd == connection->client_fd) ? connection->target_fd : connection->client_fd;
+    buffer *read_buffer = (dest_fd == connection->client_fd) ? &connection->read_p : &connection->read_c;
+    
+    // Configurar intereses
+    fd_interest dest_interest = OP_READ;
+    if (buffer_can_read(write_buffer)) {
+        dest_interest = OP_READ | OP_WRITE;  // Aún hay datos por escribir
     }
+    
+    fd_interest source_interest = OP_READ;
+    if (!buffer_can_write(read_buffer)) {
+        source_interest = OP_NOOP;  // Buffer lleno, pausar lectura
+    }
+    
+    selector_set_interest(key->s, dest_fd, dest_interest);
+    selector_set_interest(key->s, source_fd, source_interest);
     
     return REQUEST_RESPONSE;
 }
@@ -596,17 +666,33 @@ static unsigned socks5_request_connect_on_write(struct selector_key * key){
     int rfd = connection->target_fd;
     
     if(rfd == -1){
-        return ERROR;
+        send_socks5_error_response(connection, SOCKS5_REP_GENERAL_FAILURE);
+        selector_set_interest_key(key, OP_WRITE);
+        return CLOSED;
     }
 
     int err = 0; 
     socklen_t len = sizeof(err);
     if(getsockopt(rfd, SOL_SOCKET, SO_ERROR, &err, &len) < 0){
-        return ERROR;
+        send_socks5_error_response(connection, SOCKS5_REP_GENERAL_FAILURE);
+        selector_set_interest_key(key, OP_WRITE);
+        return CLOSED;
     }
     
     if(err){
-        return ERROR;
+        socks5_response_type error_type;
+        if(err == ECONNREFUSED) {
+            error_type = SOCKS5_REP_CONNECTION_REFUSED;
+        } else if(err == ENETUNREACH) {
+            error_type = SOCKS5_REP_NETWORK_UNREACHABLE;
+        } else if(err == EHOSTUNREACH) {
+            error_type = SOCKS5_REP_HOST_UNREACHABLE;
+        } else {
+            error_type = SOCKS5_REP_GENERAL_FAILURE;
+        }
+        send_socks5_error_response(connection, error_type);
+        selector_set_interest_key(key, OP_WRITE);
+        return CLOSED;
     }
 
     socks5_response_parser_t reply = {

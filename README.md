@@ -57,7 +57,7 @@ curl -v --socks5 127.0.0.1:1080 http://www.google.com
 
 ```
 
-## Ejecución — Cliente de Management (`socks5_client`)
+## Ejecución — Cliente de Management (`socks5_client`) 
 
 Autenticación al servicio de management (por defecto usuario administrador precargado `admin:pass123`):
 

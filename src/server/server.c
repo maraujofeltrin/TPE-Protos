@@ -252,7 +252,7 @@ static int create_listeners(const char *addr, const char *port) {
     }
     
     struct addrinfo hints = {
-        .ai_family = AF_INET,
+        .ai_family = AF_UNSPEC,
         .ai_socktype = SOCK_STREAM,
         .ai_flags = AI_PASSIVE,
     }, *res;

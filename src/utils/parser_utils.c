@@ -18,6 +18,9 @@ parser_utils_strcmpi_event(const enum string_cmp_event_types type) {
         case STRING_CMP_NEQ:
             ret = "neq(c)";
             break;
+        default:
+            ret = "unknown";
+            break;
     }
     return ret;
 }
