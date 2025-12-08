@@ -16,6 +16,7 @@ static unsigned send_response(struct selector_key *key, const char *message, uns
 static void write_message_to_buffer(buffer *, const char *message);
 static unsigned s5mp_handshake_read(struct selector_key * key);
 static unsigned s5mp_handshake_response_write(struct selector_key * key);
+static void s5mp_auth_arrival(const unsigned state, struct selector_key * key);
 static unsigned s5mp_write_auth(struct selector_key * key);
 static unsigned s5mp_read_auth(struct selector_key * key);
 static unsigned s5mp_request_read(struct selector_key * key);
@@ -39,6 +40,7 @@ static const struct state_definition s5mp_states_def[] = {
     },
     [S5MP_AUTH] = {
         .state = S5MP_AUTH,
+        .on_arrival = s5mp_auth_arrival,
         .on_read_ready = s5mp_read_auth,
     },
     [S5MP_AUTH_RESPONSE] = {
@@ -116,7 +118,6 @@ static unsigned s5mp_handshake_read(struct selector_key * key) {
             char * resp;
             size_t m, l;
             uint8_t * tor;
-            //VER DE MODULARIZAR PARA NO REPETIR
             if(strcmp(connection->parser.auth_parser.text, "HELLO S5MP/1.0\n") == 0) {
                 resp = "200 S5MP Handshake Successful\n";
                 tor = buffer_write_ptr(connection->buffer_w, &m);
@@ -169,6 +170,15 @@ static unsigned s5mp_handshake_response_write(struct selector_key * key) {
     }
 
     return S5MP_HANDSHAKE_RESPONSE;
+}
+
+static void s5mp_auth_arrival(const unsigned state, struct selector_key * key) {
+    (void) state;
+    s5mp_connection_t * connection = key->data;
+    if (connection) {
+        connection->parser.auth_parser.cantBytes = 0;
+        connection->parser.auth_parser.text[0] = '\0';
+    }
 }
 
 
@@ -290,6 +300,9 @@ static void s5mp_request_arrival(const unsigned state, struct selector_key * key
     s5mp_connection_t *conn = (s5mp_connection_t *)key->data;
     conn->parser.request_parser.cantBytes = 0;
     conn->parser.request_parser.text[0] = '\0';
+    
+    if (buffer_can_read(conn->buffer_r)) {
+    }
     selector_set_interest_key(key, OP_READ);
 }
 
@@ -297,22 +310,26 @@ static unsigned s5mp_request_read(struct selector_key * key) {
     s5mp_connection_t *conn = (s5mp_connection_t *)key->data;
     buffer *rb = conn->buffer_r;
     unsigned int state = S5MP_ERROR;
-    size_t avail;
-    uint8_t *in = buffer_write_ptr(rb, &avail);
-    ssize_t n = recv(key->fd, in, avail, 0);
-    if (n < 0) {
-        perror("s5mp recv");
-        char * response = "500 Internal Server Error\n";
-        write_message_to_buffer(conn->buffer_w, response);
-        selector_set_interest_key(key, OP_WRITE);
-        return S5MP_ERROR;
+    
+    if (!buffer_can_read(rb)) {
+        size_t avail;
+        uint8_t *in = buffer_write_ptr(rb, &avail);
+        ssize_t n = recv(key->fd, in, avail, 0);
+        if (n < 0) {
+            perror("s5mp recv");
+            char * response = "500 Internal Server Error\n";
+            write_message_to_buffer(conn->buffer_w, response);
+            selector_set_interest_key(key, OP_WRITE);
+            return S5MP_ERROR;
+        }
+        if(n == 0) {
+            conn->close = true;
+            selector_set_interest_key(key, OP_WRITE);
+            return S5MP_REQUEST_RESPONSE;
+        }
+        buffer_write_adv(rb, (size_t)n);
     }
-    if(n == 0) {
-        conn->close = true;
-        selector_set_interest_key(key, OP_WRITE);
-        return S5MP_REQUEST_RESPONSE;
-    }
-    buffer_write_adv(rb, (size_t)n);
+    
     while (buffer_can_read(rb)) {
         uint8_t c = buffer_read(rb);
         size_t idx = conn->parser.request_parser.cantBytes;

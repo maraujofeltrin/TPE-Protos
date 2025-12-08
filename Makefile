@@ -1,6 +1,6 @@
 # Compilador y flags
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -pedantic -g -O0 -D_POSIX_C_SOURCE=200809L -fsanitize=address -fsanitize=leak
+CFLAGS = -Wall -Wextra -std=c99 -pedantic -g -O3 -D_POSIX_C_SOURCE=200809L -fsanitize=address -fsanitize=leak
 LDFLAGS = -fsanitize=address -fsanitize=leak
 TEST_LIBS = -lcheck -lm -lrt -lpthread -lsubunit
 

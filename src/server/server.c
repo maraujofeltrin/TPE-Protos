@@ -156,6 +156,10 @@ static void s5mp_handle_write(struct selector_key *key){
     if (!key->data) return;
     connection = (s5mp_connection_t *) key->data;
     connection->stm.current = &connection->stm.states[next];
+    
+    if (next == S5MP_REQUEST && buffer_can_read(connection->buffer_r)) {
+        stm_handler_read(&connection->stm, key);
+    }
 }
 
 static void s5mp_handle_close(struct selector_key *key){
@@ -224,7 +228,7 @@ static void s5mp_handle_accept_connection(int server_fd, fd_selector selector){
     buffer_init(connection->buffer_w, BUFFER_MAX, raw_w);
 
     connection->stm.states = get_s5mp_state_definition();
-    connection->stm.current = S5MP_HANDSHAKE;
+    connection->stm.initial = S5MP_HANDSHAKE;
     connection->stm.max_state = S5MP_TERMINATED;
 
     stm_init(&connection->stm);
@@ -387,10 +391,10 @@ int main(int argc, char **argv) {
     metrics_init();
     users_init();
 
-    users_add("admin", "pass123", ROLE_ADMIN);
 
     for (int i = 0; args.users[i].name != NULL && i < MAX_USERS; i++) {
-        users_add(args.users[i].name, args.users[i].pass, ROLE_USER);
+        user_role_t role = (i == 0) ? ROLE_ADMIN : ROLE_USER;
+        users_add(args.users[i].name, args.users[i].pass, role);
     }
 
     selector_init(&(struct selector_init){

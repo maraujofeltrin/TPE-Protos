@@ -47,5 +47,7 @@ void free_users(void);
 
 void users_init(void);
 
+bool has_users(void);
+
 #endif 
 

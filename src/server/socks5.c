@@ -158,13 +158,16 @@ static unsigned socks5_handshake_on_read(struct selector_key * key) {
             handshake->response.version = SOCKS5_VERSION;
             handshake->response.method = HANDSHAKE_METHOD_NO_ACCEPTABLE;
             
+            bool requires_auth = has_users();
+            
             for(uint8_t i = 0; i < handshake->request.nmethods; i++){
-                if(handshake->request.methods[i] == AUTH_USER){
+                if(requires_auth && handshake->request.methods[i] == AUTH_USER){
                     handshake->response.method = AUTH_USER;
                     break;
                 }
-                if(handshake->request.methods[i] == NO_AUTH && handshake->response.method == HANDSHAKE_METHOD_NO_ACCEPTABLE){
+                if(!requires_auth && handshake->request.methods[i] == NO_AUTH){
                     handshake->response.method = NO_AUTH;
+                    break;
                 }
             }
 
@@ -250,6 +253,7 @@ static unsigned socks5_authentication_on_read(struct selector_key * key) {
         user_t * user = authenticate_user(auth_ctx->request.username, auth_ctx->request.password);
         connection->user = user;
         connection->auth_status = (user != NULL) ? AUTH_SUCCESS : AUTH_FAILED;
+        auth_ctx->response.status = connection->auth_status;
         buffer *wb = &connection->write_p;
         size_t available;
         uint8_t *out = buffer_write_ptr(wb, &available);
@@ -538,25 +542,29 @@ static unsigned socks5_request_response_on_read(struct selector_key * key){
     }
     buffer_read_adv(read_buffer, available);
     
-    // Intentar escribir inmediatamente (busy write)
-    size_t bytes_to_write;
-    uint8_t *write_src = buffer_read_ptr(write_buffer, &bytes_to_write);
-    if (bytes_to_write > 0) {
+    while (buffer_can_read(write_buffer)) {
+        size_t bytes_to_write;
+        uint8_t *write_src = buffer_read_ptr(write_buffer, &bytes_to_write);
+        if (bytes_to_write == 0) break;
+        
         ssize_t sent = send(dest_fd, write_src, bytes_to_write, MSG_NOSIGNAL | MSG_DONTWAIT);
         if (sent > 0) {
             buffer_read_adv(write_buffer, sent);
+        } else if (sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            break;
+        } else {
+            break;
         }
     }
     
-    // Configurar intereses según el estado de los buffers
     fd_interest source_interest = OP_READ;
     if (!buffer_can_write(read_buffer)) {
-        source_interest = OP_NOOP;  // Buffer lleno, pausar lectura
+        source_interest = OP_NOOP;
     }
     
     fd_interest dest_interest = OP_READ;
     if (buffer_can_read(write_buffer)) {
-        dest_interest = OP_READ | OP_WRITE;  // Hay datos pendientes por escribir
+        dest_interest = OP_READ | OP_WRITE;
     }
     
     selector_set_interest(key->s, source_fd, source_interest);
@@ -614,19 +622,53 @@ static unsigned socks5_request_response_on_write(struct selector_key * key) {
         buffer_read_adv(write_buffer, sent);
     }
     
-    // Determinar el origen de los datos
     int source_fd = (dest_fd == connection->client_fd) ? connection->target_fd : connection->client_fd;
     buffer *read_buffer = (dest_fd == connection->client_fd) ? &connection->read_p : &connection->read_c;
     
-    // Configurar intereses
+    while (buffer_can_write(read_buffer)) {
+        size_t space;
+        uint8_t *write_ptr = buffer_write_ptr(read_buffer, &space);
+        if (space == 0) break;
+        
+        ssize_t received = recv(source_fd, write_ptr, space, MSG_DONTWAIT);
+        if (received > 0) {
+            buffer_write_adv(read_buffer, received);
+            connection->bytes_sent += received;
+            metrics_data_transferred(received);
+            
+            size_t available;
+            uint8_t *read_ptr = buffer_read_ptr(read_buffer, &available);
+            for (size_t i = 0; i < available && buffer_can_write(write_buffer); i++) {
+                buffer_write(write_buffer, read_ptr[i]);
+            }
+            buffer_read_adv(read_buffer, available);
+            
+            bytes = 0;
+            src = buffer_read_ptr(write_buffer, &bytes);
+            if (bytes > 0) {
+                ssize_t sent2 = send(dest_fd, src, bytes, MSG_NOSIGNAL | MSG_DONTWAIT);
+                if (sent2 > 0) {
+                    buffer_read_adv(write_buffer, sent2);
+                }
+            }
+        } else if (received < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            break;
+        } else {
+            if (received == 0) {
+                return CLOSED;
+            }
+            break;
+        }
+    }
+    
     fd_interest dest_interest = OP_READ;
     if (buffer_can_read(write_buffer)) {
-        dest_interest = OP_READ | OP_WRITE;  // Aún hay datos por escribir
+        dest_interest = OP_READ | OP_WRITE;
     }
     
     fd_interest source_interest = OP_READ;
     if (!buffer_can_write(read_buffer)) {
-        source_interest = OP_NOOP;  // Buffer lleno, pausar lectura
+        source_interest = OP_NOOP;
     }
     
     selector_set_interest(key->s, dest_fd, dest_interest);

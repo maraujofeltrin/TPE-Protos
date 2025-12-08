@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdbool.h>
 
 #include "include/users.h"
 
@@ -10,6 +11,10 @@ static user_t users_store[SERVER_MAX_USERS];
 static size_t users_store_count = 0;
 static int cant_logs = 0, pos_logs = 0;
 static logs_t logs[MAX_LOGS];
+
+bool has_users(void) {
+	return users_store_count > 0;
+}
 
 void users_init(void) {
 	users_store_count = 0;

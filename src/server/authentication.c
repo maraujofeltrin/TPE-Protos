@@ -27,8 +27,8 @@ auth_index authentication_parse(struct authentication_context * auth_ctx, buffer
             case AUTH_STATE_UNAME:
                 auth_ctx->request.username[auth_ctx->bytes_read++] = aux;
                 if(auth_ctx->bytes_read == auth_ctx->request.ulen) {
+                    auth_ctx->request.username[auth_ctx->request.ulen] = '\0';
                     auth_ctx->bytes_read = 0;
-                    auth_ctx->request.username[auth_ctx->bytes_read] = '\0';
                     auth_ctx->index = AUTH_STATE_PLEN;
                 }
                 break;
@@ -45,7 +45,9 @@ auth_index authentication_parse(struct authentication_context * auth_ctx, buffer
             case AUTH_STATE_PASSWD:
                 auth_ctx->request.password[auth_ctx->bytes_read++] = aux;
                 if(auth_ctx->bytes_read == auth_ctx->request.plen) {
-                    return AUTH_STATE_PASSWD;
+                    auth_ctx->request.password[auth_ctx->request.plen] = '\0';
+                    auth_ctx->index = AUTH_COMPLETED;
+                    return AUTH_COMPLETED;
                 }
                 break;
             case AUTH_ERROR_DEFAULT:
