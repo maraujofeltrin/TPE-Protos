@@ -190,6 +190,17 @@ int access_logs(const char * username, const char * ip, const char * dest, size_
 	logs[pos_logs].username = strdup(username);
 	logs[pos_logs].ip = strdup(ip);
 	logs[pos_logs].dest = strdup(dest);
+	
+	if(!logs[pos_logs].username || !logs[pos_logs].ip || !logs[pos_logs].dest) {
+		if(logs[pos_logs].username) free(logs[pos_logs].username);
+		if(logs[pos_logs].ip) free(logs[pos_logs].ip);
+		if(logs[pos_logs].dest) free(logs[pos_logs].dest);
+		logs[pos_logs].username = NULL;
+		logs[pos_logs].ip = NULL;
+		logs[pos_logs].dest = NULL;
+		return -1;
+	}
+	
 	logs[pos_logs].cant_bytes = cant_bytes;
 	logs[pos_logs].time = time(NULL);
 	
@@ -211,4 +222,21 @@ void free_users(void) {
 		users_store[i].role = ROLE_INACTIVE;
 	}
 	users_store_count = 0;
+	
+	for (int i = 0; i < MAX_LOGS; i++) {
+		if(logs[i].username) {
+			free(logs[i].username);
+			logs[i].username = NULL;
+		}
+		if(logs[i].ip) {
+			free(logs[i].ip);
+			logs[i].ip = NULL;
+		}
+		if(logs[i].dest) {
+			free(logs[i].dest);
+			logs[i].dest = NULL;
+		}
+	}
+	cant_logs = 0;
+	pos_logs = 0;
 }

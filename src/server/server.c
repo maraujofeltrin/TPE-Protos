@@ -179,8 +179,14 @@ static void s5mp_handle_close(struct selector_key *key){
     
     close(key->fd);
     
-    free(connection->buffer_r);
-    free(connection->buffer_w);
+    if(connection->buffer_r) {
+        if(connection->buffer_r->data) free(connection->buffer_r->data);
+        free(connection->buffer_r);
+    }
+    if(connection->buffer_w) {
+        if(connection->buffer_w->data) free(connection->buffer_w->data);
+        free(connection->buffer_w);
+    }
     free(connection); 
 }
 
@@ -244,6 +250,8 @@ static void s5mp_handle_accept_connection(int server_fd, fd_selector selector){
     if(selector_register(selector, client_fd, &s5mp_handler, OP_READ, connection) != SELECTOR_SUCCESS) {
         fprintf(stderr, "Failed to register S5MP client\n");
         close(client_fd);
+        if(connection->buffer_r->data) free(connection->buffer_r->data);
+        if(connection->buffer_w->data) free(connection->buffer_w->data);
         free(connection->buffer_r);
         free(connection->buffer_w);
         free(connection);   
