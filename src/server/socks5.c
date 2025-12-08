@@ -342,10 +342,8 @@ static void socks5_request_on_arrival(const unsigned int state, struct selector_
 
     uint16_t port = connection->parser.request.request.dest_address.port;
     char s[6];
-    snprintf(s, sizeof(s), "%u", port);
     
     char *hostname = (char*)connection->parser.request.request.dest_address.address.domainname.addr;
-    fprintf(stderr, "[DNS] Resolving hostname: %s port: %s\n", hostname, s);
 
     struct addrinfo hints = {
         .ai_family = AF_UNSPEC,
@@ -355,10 +353,7 @@ static void socks5_request_on_arrival(const unsigned int state, struct selector_
     int res = getaddrinfo(hostname, s, &hints, &connection->req_address);
 
     if(res != 0){
-        fprintf(stderr, "[DNS] Resolution failed: %s\n", gai_strerror(res));
         connection->req_address = NULL;
-    } else {
-        fprintf(stderr, "[DNS] Resolution succeeded\n");
     }
     
     selector_notify_block(key->s, key->fd);
