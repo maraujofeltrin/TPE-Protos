@@ -49,5 +49,7 @@ void users_init(void);
 
 bool has_users(void);
 
+int access_logs(const char * username, const char * ip, const char * dest, size_t cant_bytes);
+
 #endif 
 

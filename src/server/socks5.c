@@ -405,6 +405,7 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                         
                         char ip4_str[INET_ADDRSTRLEN];
                         inet_ntop(AF_INET, connection->parser.request.request.dest_address.address.ipv4, ip4_str, INET_ADDRSTRLEN);
+                        snprintf(connection->target_addr, sizeof(connection->target_addr), "%s:%u", ip4_str, connection->parser.request.request.dest_address.port);
                         
                         int target_fd_new = socket(connection->remote_domain, SOCK_STREAM | SOCK_NONBLOCK, 0);
                         if(target_fd_new >= 0) {
@@ -429,6 +430,9 @@ static unsigned socks5_request_on_read(struct selector_key * key){
                         return CLOSED;
 
                     case SOCKS5_ATYP_DOMAINNAME: {
+                        snprintf(connection->target_addr, sizeof(connection->target_addr), "%s:%u",
+                                connection->parser.request.request.dest_address.address.domainname.addr,
+                                connection->parser.request.request.dest_address.port);
                         struct selector_key *sk = malloc(sizeof(struct selector_key));
                         if(!sk) return ERROR;
                         *sk = *key;
@@ -455,6 +459,7 @@ static unsigned socks5_request_on_read(struct selector_key * key){
 
                         char ip6_str[INET6_ADDRSTRLEN];
                         inet_ntop(AF_INET6, connection->parser.request.request.dest_address.address.ipv6, ip6_str, INET6_ADDRSTRLEN);
+                        snprintf(connection->target_addr, sizeof(connection->target_addr), "[%s]:%u", ip6_str, connection->parser.request.request.dest_address.port);
                         
                         target_fd_new = socket(connection->remote_domain, SOCK_STREAM | SOCK_NONBLOCK, 0);
                         if(target_fd_new >= 0) {

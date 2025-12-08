@@ -180,9 +180,16 @@ int access_logs(const char * username, const char * ip, const char * dest, size_
 	if(!username || !ip || !dest){
 		return -1;
 	}
-	strcpy(logs[pos_logs].username, username);
-	strcpy(logs[pos_logs].ip, ip);
-	strcpy(logs[pos_logs].dest, dest);
+	
+	// Free existing strings if any
+	if(logs[pos_logs].username) free(logs[pos_logs].username);
+	if(logs[pos_logs].ip) free(logs[pos_logs].ip);
+	if(logs[pos_logs].dest) free(logs[pos_logs].dest);
+	
+	// Allocate and copy new strings
+	logs[pos_logs].username = strdup(username);
+	logs[pos_logs].ip = strdup(ip);
+	logs[pos_logs].dest = strdup(dest);
 	logs[pos_logs].cant_bytes = cant_bytes;
 	logs[pos_logs].time = time(NULL);
 	

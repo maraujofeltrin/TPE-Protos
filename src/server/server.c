@@ -111,6 +111,14 @@ static void socks5_handle_close(struct selector_key *key){
         connection->client_fd = -1;
     }
 
+    // Register access log if user authenticated and bytes transferred
+    if (connection->user != NULL && connection->bytes_sent > 0) {
+        const char *username = connection->user->username ? connection->user->username : "unknown";
+        const char *client_ip = connection->client_ip[0] != '\0' ? connection->client_ip : "unknown";
+        const char *dest = connection->target_addr[0] != '\0' ? connection->target_addr : "unknown";
+        access_logs(username, client_ip, dest, connection->bytes_sent);
+    }
+
     metrics_connection_closed();
     free(connection);
     key->data = NULL;  
