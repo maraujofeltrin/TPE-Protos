@@ -42,11 +42,8 @@ Ejemplos:
 ./build/bin/socks5d -p 1080 -P 9090 -u alice:alicepwd -u bob:bobpwd
 ```
 
-Usuario administrador por defecto:
-- Al iniciar el servidor se crea automáticamente un usuario admin:
-	- usuario: `admin`
-	- contraseña: `pass123`
-	- rol: `admin`
+- Al iniciar el servidor cuando se cree el primer usuario, se le va a adjudicar el rol de ADMIN por default.
+
 
 ## Uso como proxy con `curl`
 
@@ -74,8 +71,8 @@ Todos los demás requieren rol **admin**.
 
 | Opción | Descripción | Permisos |
 |--------|-------------|----------|
-| `-h` | Muestra la ayuda y finaliza. | user / admin |
-| `-v` | Muestra la versión y finaliza. | user / admin |
+| `-h` | Muestra la ayuda y finaliza. | - |
+| `-v` | Muestra la versión y finaliza. | - |
 | `-m` | Obtiene métricas del servidor. | user / admin |
 | `-u <user>:<pass>` | Establece credenciales para la sesión de administración. | admin |
 | `-p <port>` | Puerto del servicio de management (por defecto: `8080`). | admin |

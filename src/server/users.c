@@ -107,7 +107,7 @@ bool permission_user_command(char * user, const char * command) {
 	if (role == ROLE_ADMIN) {
 		return true; 
 	}
-	if (strcmp(command, "LIST") == 0) {
+	if (strcmp(command, "LIST") == 0 || strcmp(command, "GET_ALL_METRICS") == 0) {
 		return true;
 	}	
 	return false;

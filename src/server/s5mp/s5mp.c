@@ -263,6 +263,30 @@ static unsigned s5mp_read_auth(struct selector_key * key) {
                 selector_set_interest_key(key, OP_WRITE);
                 return S5MP_AUTH_RESPONSE;
             }
+            else if (strcmp(cmd, "GET_METRICS") == 0) {
+                if (has_users()) {
+                    write_message_to_buffer(conn->buffer_w, "401 Unauthorized: Authentication required\n");
+                    conn->close = true;
+                    selector_set_interest_key(key, OP_WRITE);
+                    return S5MP_AUTH_RESPONSE;
+                }
+                
+                char metrics[256];
+                int length = snprintf(metrics, sizeof(metrics),
+                    "200 OK\nactive_connections %ld\ntotal_connections %ld\ntotal_bytes_transferred %ld\n.\n",
+                    metrics_get_active_connections(),
+                    metrics_get_total_connections(),
+                    metrics_get_total_data_transferred()
+                );
+                if (length > 0 && (size_t)length < sizeof(metrics)) {
+                    write_message_to_buffer(conn->buffer_w, metrics);
+                    conn->close = true;
+                    selector_set_interest_key(key, OP_WRITE);
+                    return S5MP_AUTH_RESPONSE;
+                } else {
+                    return send_response(key, "500 Internal Server Error\n", S5MP_ERROR);
+                }
+            }
 
             return send_response(key, "400 Bad Request\n", S5MP_ERROR);
         }

@@ -7,7 +7,10 @@ int main(int argc, char **argv) {
     client_list_t args;
     command_parse_args(argc, argv, &args);
 
-    status_types status = connect_to_server(args.address, args.port, args.auth_username, args.auth_password);
+    const char *username = args.auth_username[0] != '\0' ? args.auth_username : NULL;
+    const char *password = args.auth_password[0] != '\0' ? args.auth_password : NULL;
+
+    status_types status = connect_to_server(args.address, args.port, username, password);
     if (status != SUCCESS) {
         fprintf(stderr, "Failed to connect or authenticate with server.\n");
         return -1;

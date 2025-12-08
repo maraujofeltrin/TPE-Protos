@@ -334,20 +334,22 @@ status_types connect_to_server(const char * ip, uint16_t port, const char * user
         return SERVER_ERROR;
     }
 
-    snprintf(buf, sizeof(buf), "AUTH %s %s\n", username, password);
-    if(send_full(sockfd, buf, strlen(buf)) <= 0){
-        close_connection();
-        return SERVER_ERROR;
-    }
-    
-    if (recv_line(sockfd, buf, sizeof(buf)) <= 0){
-        close_connection();
-        return SERVER_ERROR;
-    }
-    
-    if(strncmp(buf, "200", 3) != 0){
-        close_connection();
-        return AUTHENTICATION_ERROR;
+    if (username != NULL && password != NULL) {
+        snprintf(buf, sizeof(buf), "AUTH %s %s\n", username, password);
+        if(send_full(sockfd, buf, strlen(buf)) <= 0){
+            close_connection();
+            return SERVER_ERROR;
+        }
+        
+        if (recv_line(sockfd, buf, sizeof(buf)) <= 0){
+            close_connection();
+            return SERVER_ERROR;
+        }
+        
+        if(strncmp(buf, "200", 3) != 0){
+            close_connection();
+            return AUTHENTICATION_ERROR;
+        }
     }
 
     return SUCCESS;
