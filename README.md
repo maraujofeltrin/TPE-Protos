@@ -52,9 +52,9 @@ Usuario administrador por defecto:
 
 Una vez que el servidor esté en ejecución, podés verificar que funcione haciendo una solicitud a través del proxy:
 ```bash
+curl --proxy socks5h://[::1]:1080 https://www.google.com
 curl --proxy socks5h://127.0.0.1:1080 https://www.google.com
 curl -v --socks5 127.0.0.1:1080 http://www.google.com
-
 ```
 
 ## Ejecución — Cliente de Management (`socks5_client`) 
