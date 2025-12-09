@@ -49,9 +49,20 @@ Ejemplos:
 
 Una vez que el servidor esté en ejecución, podés verificar que funcione haciendo una solicitud a través del proxy:
 ```bash
+# Conectar vía IPv6 sin autenticación (si el servidor no requiere auth)
 curl --proxy socks5h://[::1]:1080 https://www.google.com
+
+# Conectar vía IPv4 sin autenticación
 curl --proxy socks5h://127.0.0.1:1080 https://www.google.com
+
+# Modo verbose para ver detalles de la conexión
 curl -v --socks5 127.0.0.1:1080 http://www.google.com
+ 
+# Conectar con autenticación usuario:contraseña
+curl -x socks5h://admin:pass123@127.0.0.1:1080 http://www.google.com
+
+#Conectarse al servidor si es que este se encuentra corriendo en pampero
+curl -x socks5h://admin:pass123@pampero.itba.edu.ar:1080 http://www.google.com/
 ```
 
 ## Ejecución — Cliente de Management (`socks5_client`) 
