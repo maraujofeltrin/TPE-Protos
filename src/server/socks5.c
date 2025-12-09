@@ -340,8 +340,8 @@ static void socks5_request_on_arrival(const unsigned int state, struct selector_
     struct selector_key * key = (struct selector_key *)arg;
     socks5_connection_t * connection = key->data;
 
-    uint16_t port = connection->parser.request.request.dest_address.port;
     char s[6];
+    snprintf(s, sizeof(s), "%u", connection->parser.request.request.dest_address.port);
     
     char *hostname = (char*)connection->parser.request.request.dest_address.address.domainname.addr;
 

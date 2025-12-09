@@ -1,7 +1,6 @@
 # Compilador y flags
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -pedantic -g -O3 -D_POSIX_C_SOURCE=200809L -fsanitize=address -fsanitize=leak
-LDFLAGS = -fsanitize=address -fsanitize=leak
+CFLAGS = -Wall -Wextra -std=c99 -pedantic -g -O3 -D_POSIX_C_SOURCE=200809L
 TEST_LIBS = -lcheck -lm -lrt -lpthread -lsubunit
 
 # Directorios
@@ -89,14 +88,14 @@ $(BIN_DIR)/%_test: $(TEST_DIR)/%_test.c $(UTILS_LIB) | $(BIN_DIR)
 server: $(UTILS_LIB) $(SERVER_TARGET)
 
 $(SERVER_TARGET): $(SERVER_OBJECTS) $(UTILS_LIB) | $(BIN_DIR)
-	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
+	$(CC) $(CFLAGS) $^ -o $@
 
 # Construir cliente (cuando exista archivo main)  
 .PHONY: client
 client: $(UTILS_LIB) $(CLIENT_TARGET)
 
 $(CLIENT_TARGET): $(CLIENT_OBJECTS) $(UTILS_LIB) | $(BIN_DIR)
-	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
+	$(CC) $(CFLAGS) $^ -o $@
 
 # Limpiar archivos compilados
 .PHONY: clean
