@@ -101,9 +101,6 @@ int main(int argc, char **argv) {
                 printf("Failed to delete user.\n");
             }
             break;
-        case CMD_QUIT:
-            printf("Exiting...\n");
-            break;
         default:
             printf("Unknown command mode.\n");
             break;

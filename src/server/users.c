@@ -181,12 +181,10 @@ int access_logs(const char * username, const char * ip, const char * dest, size_
 		return -1;
 	}
 	
-	// Free existing strings if any
 	if(logs[pos_logs].username) free(logs[pos_logs].username);
 	if(logs[pos_logs].ip) free(logs[pos_logs].ip);
 	if(logs[pos_logs].dest) free(logs[pos_logs].dest);
 	
-	// Allocate and copy new strings
 	logs[pos_logs].username = strdup(username);
 	logs[pos_logs].ip = strdup(ip);
 	logs[pos_logs].dest = strdup(dest);

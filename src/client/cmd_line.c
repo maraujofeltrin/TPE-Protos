@@ -17,8 +17,7 @@ static void command_help(const char * cmd){
         "  -a <username>:<password>          Add user with role user                  (ADD_USER)\n"
         "  -r <username>:<role>              Set role for user                        (ROLE_SETTER)\n"
         "  -b <buffer_size>                  Set buffer size (in bytes)               (BUFFER_NEWSIZE)\n"
-        "  -d <username>                     Delete user                              (DELETE_USER)\n"
-        "  -q                                Quit                                     (QUIT)\n",
+        "  -d <username>                     Delete user                              (DELETE_USER)\n",
         cmd
     );
 }
@@ -106,11 +105,10 @@ void command_parse_args(int argc, char *argv[], client_list_t * config){
         {"role",    required_argument, NULL, 'r'},
         {"buffer",  required_argument, NULL, 'b'},
         {"delete",  required_argument, NULL, 'd'},
-        {"quit",    no_argument,       NULL, 'q'},
         {0, 0, 0, 0}
     };
     
-    const char *option_string = "hvp:u:lmUa:r:b:d:q";
+    const char *option_string = "hvp:u:lmUa:r:b:d:";
     
     while((opt = getopt_long(argc, argv, option_string, long_options, NULL)) != -1){
         switch(opt){
@@ -174,10 +172,6 @@ void command_parse_args(int argc, char *argv[], client_list_t * config){
                 strncpy(config->target_username, optarg, USERNAME_MAX - 1);
                 config->target_username[USERNAME_MAX - 1] = '\0';
                 config->mode = CMD_DELETE_USER;
-                break;
-                
-            case 'q':
-                config->mode = CMD_QUIT;
                 break;
                 
             default:

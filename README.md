@@ -93,7 +93,6 @@ Todos los demás requieren rol **admin**.
 | `-r <username>:<role>` | Modifica el rol de un usuario. | admin |
 | `-b <buffer_size>` | Cambia el tamaño del buffer del servidor. | admin |
 | `-d <username>` | Elimina un usuario. | admin |
-| `-q` | Finaliza la ejecución del cliente. | admin |
 
 
 Nota:
